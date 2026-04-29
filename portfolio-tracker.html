@@ -1942,7 +1942,7 @@ function renderRow(pos) {
     <td><input class="cell-input ticker-input" type="text" placeholder="AAPL" value="${esc(pos.ticker)}" onblur="setField(${pos.id},'ticker',this.value.toUpperCase())" oninput="this.value=this.value.toUpperCase()" ${isClosed?'disabled':''}></td>
     <td><input class="cell-input account-input" type="text" placeholder="Brokerage" value="${esc(pos.account)}" onblur="setField(${pos.id},'account',this.value)" ${isClosed?'disabled':''}></td>
     <td><input class="cell-input date-input" type="text" placeholder="YYYY-MM-DD" value="${esc(pos.dateBought)}" onblur="handleDateBlur(${pos.id},'dateBought',this)" ${isClosed?'disabled':''}></td>
-    <td class="calc-cell" style="text-align:center;white-space:nowrap">${(() => {
+    <td class="calc-cell held-cell" style="text-align:center;white-space:nowrap">${(() => {
       if (!pos.dateBought) return '<span class="dash">—</span>';
       const days = Math.floor((new Date() - new Date(pos.dateBought)) / 86400000);
       const label = days < 30 ? '< 1M' : days < 90 ? '1–3M' : days < 180 ? '3–6M' : days < 365 ? '6–12M' : days < 730 ? '1–2Y' : '2Y+';
@@ -4938,9 +4938,9 @@ function updateRowCalcs(id) {
   else if (c.result === 'Trail') resultHtml = '<span class="result-badge result-trail">Trail</span>';
   else if (c.result === 'Tied') resultHtml = '<span class="result-badge result-tied">Tied</span>';
 
-  const cells = row.querySelectorAll('td.calc-cell');
+  const cells = row.querySelectorAll('td.calc-cell:not(.held-cell)');
   // calc cells are: invested, exitValue, gainLoss, yourReturn, spxReturn, vsSpx
-  // They start after the input cells — find by index within calc-cells
+  // (the held-cell is excluded — it's a date-derived label, not a money value)
   if (cells.length >= 6) {
     cells[0].innerHTML = c.invested > 0 ? fmtDollar(c.invested) : '<span class="dash">—</span>';
     cells[0].className = 'calc-cell';
