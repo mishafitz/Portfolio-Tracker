@@ -650,7 +650,7 @@
 <!-- Polygon API Key Panel -->
 <div id="polygon-key-panel" style="display:none;background:var(--color-background-secondary);border-bottom:1px solid var(--color-border-tertiary);padding:8px 20px;align-items:center;gap:10px">
   <span style="font-size:10px;color:var(--color-text-tertiary)">Polygon.io API Key</span>
-  <input id="polygon-key-input" class="modal-input" type="password" placeholder="Paste your Polygon API key here" style="width:280px;font-size:11px;padding:4px 8px" oninput="savePolygonKey(this.value)">
+  <input id="polygon-key-input" class="modal-input" type="password" placeholder="Paste your Polygon API key here" style="width:280px;font-size:11px;padding:4px 8px" oninput="savePolygonKey(this.value)" onchange="savePolygonKey(this.value)" onblur="savePolygonKey(this.value)">
   <a href="https://polygon.io/dashboard/api-keys" target="_blank" style="font-size:10px;color:var(--color-text-info)">Get key at polygon.io ↗</a>
   <span style="font-size:10px;color:var(--color-text-tertiary)">Free account · previous day close</span>
 </div>
@@ -2677,6 +2677,11 @@ function loadPolygonKey() {
 }
 
 async function refreshAllPrices() {
+  // Re-read key from input field directly as fallback
+  const keyInput = document.getElementById('polygon-key-input');
+  if (keyInput && keyInput.value.trim()) polygonKey = keyInput.value.trim();
+  if (!polygonKey) loadPolygonKey(); // try localStorage
+
   if (!polygonKey) {
     togglePolygonKey();
     const status = document.getElementById('refresh-status');
