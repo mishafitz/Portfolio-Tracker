@@ -630,6 +630,8 @@
   <div class="header-actions">
     <span id="save-note-inline" style="font-size:10px;color:var(--color-text-tertiary);opacity:0;transition:opacity 0.3s;">Saved</span>
     <button class="btn btn-sm" onclick="addPosition()">+ Add Position</button>
+    <button class="btn btn-sm" onclick="exportData()" style="margin-right:4px">⬇ Export Data</button>
+    <label class="btn btn-sm" style="cursor:pointer;margin-right:4px">⬆ Import Data<input type="file" accept=".json" style="display:none" onchange="importData(this)"></label>
     <button class="btn btn-sm btn-danger" onclick="clearAll()">Clear All</button>
   </div>
 </div>
@@ -643,7 +645,16 @@
   <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
     <button id="refresh-prices-btn" class="btn btn-sm btn-primary" onclick="refreshAllPrices()" style="font-size:10px;padding:4px 12px">⟳ Refresh Prices</button>
     <span id="refresh-status" style="font-size:10px;color:var(--color-text-tertiary)"></span>
+    <span id="polygon-key-toggle" style="font-size:10px;color:var(--color-text-tertiary);cursor:pointer;text-decoration:underline" onclick="togglePolygonKey()">API Key</span>
   </div>
+</div>
+
+<!-- Polygon API Key Panel -->
+<div id="polygon-key-panel" style="display:none;background:var(--color-background-secondary);border-bottom:1px solid var(--color-border-tertiary);padding:8px 20px;align-items:center;gap:10px">
+  <span style="font-size:10px;color:var(--color-text-tertiary)">Polygon.io API Key</span>
+  <input id="polygon-key-input" class="modal-input" type="password" placeholder="Paste your Polygon API key here" style="width:280px;font-size:11px;padding:4px 8px" oninput="savePolygonKey(this.value)" onchange="savePolygonKey(this.value)" onblur="savePolygonKey(this.value)">
+  <a href="https://polygon.io/dashboard/api-keys" target="_blank" style="font-size:10px;color:var(--color-text-info)">Get key at polygon.io ↗</a>
+  <span style="font-size:10px;color:var(--color-text-tertiary)">Free account · previous day close</span>
 </div>
 
 <!-- Instructions -->
@@ -2668,9 +2679,22 @@ function loadPolygonKey() {
 }
 
 async function refreshAllPrices() {
+  // Re-read key from input field directly as fallback
+  const keyInput = document.getElementById('polygon-key-input');
+  if (keyInput && keyInput.value.trim()) polygonKey = keyInput.value.trim();
+  if (!polygonKey) loadPolygonKey(); // try localStorage
+
+  if (!polygonKey) {
+    togglePolygonKey();
+    const status = document.getElementById('refresh-status');
+    if (status) { status.textContent = 'Enter your API key first'; status.style.color = '#fbbf24'; }
+    return;
+  }
   const btn = document.getElementById('refresh-prices-btn');
   const status = document.getElementById('refresh-status');
-  btn.disabled = true; btn.textContent = '⟳ Fetching...'; status.textContent = '';
+  btn.disabled = true; btn.textContent = '⟳ Fetching...'; 
+  status.textContent = `Updating ${tickers.length} tickers — takes ~${Math.ceil(tickers.length * 13 / 60)} min on free tier`;
+  status.style.color = '#fbbf24';
 
   const openPositions = positions.filter(p => !p.closed && p.ticker);
   const tickers = [...new Set(openPositions.map(p => p.ticker))];
@@ -2680,12 +2704,20 @@ async function refreshAllPrices() {
 
   for (const ticker of tickers) {
     try {
-      // Yahoo Finance v8 — no API key needed, good CORS support
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`;
-      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      const cleanTicker = ticker.replace('-', '.'); // BRK-B → BRK.B
+      // Try snapshot endpoint first, fall back to prev
+      const url = `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${cleanTicker}?apiKey=${polygonKey}`;
+      const res = await fetch(url);
       const data = await res.json();
-      const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+      let price = data?.ticker?.day?.c || data?.ticker?.prevDay?.c;
 
+      if (!price) {
+        // Fallback to prev endpoint
+        const url2 = `https://api.polygon.io/v2/aggs/ticker/${cleanTicker}/prev?adjusted=true&apiKey=${polygonKey}`;
+        const res2 = await fetch(url2);
+        const data2 = await res2.json();
+        price = data2?.results?.[0]?.c;
+      }
       if (price) {
         if (ticker === 'VOO') {
           spCurrentPrice = price;
@@ -2698,7 +2730,7 @@ async function refreshAllPrices() {
         }
       } else { failed.push(ticker); }
     } catch(e) { failed.push(ticker); }
-    await new Promise(r => setTimeout(r, 150));
+    await new Promise(r => setTimeout(r, 13000)); // Free tier: 5 calls/min = 12s apart
   }
 
   btn.disabled = false; btn.textContent = '⟳ Refresh Prices';
@@ -2709,7 +2741,7 @@ async function refreshAllPrices() {
     status.textContent = `✓ ${updated} updated · ${failed.join(', ')} failed`;
     status.style.color = '#fbbf24';
   } else {
-    status.textContent = 'Failed — try again in a moment';
+    status.textContent = 'Failed — check your API key';
     status.style.color = 'var(--color-text-danger)';
   }
   renderAll(); scheduleSave();
@@ -4925,6 +4957,51 @@ function undoSell() {
   document.getElementById('undo-toast').classList.remove('visible');
   renderAll();
   scheduleSave();
+}
+
+function exportData() {
+  const data = {
+    positions, nextId, spxLive, spxLiveDate, cashBuckets, cashLedger,
+    spLots, spCurrentPrice, version: 1
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'portfolio-tracker-data.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.positions) { alert('Invalid data file.'); return; }
+      positions = data.positions;
+      nextId = data.nextId || positions.length + 1;
+      if (data.spxLive) spxLive = data.spxLive;
+      if (data.spxLiveDate) spxLiveDate = data.spxLiveDate;
+      if (data.cashBuckets) cashBuckets = data.cashBuckets;
+      if (data.cashLedger) cashLedger = data.cashLedger;
+      if (data.spLots) spLots = data.spLots;
+      if (data.spCurrentPrice) spCurrentPrice = data.spCurrentPrice;
+      await savePositions();
+      restoreSpxInput();
+      renderAll();
+      renderSpBar();
+      renderSpSummary();
+      renderSleeveBreakdown();
+      renderSleeveRef();
+      alert('✓ Data imported successfully!');
+    } catch(e) {
+      alert('Failed to import — make sure you selected the right file.');
+    }
+  };
+  reader.readAsText(file);
 }
 
 function clearAll() {
