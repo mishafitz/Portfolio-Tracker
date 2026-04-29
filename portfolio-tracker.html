@@ -521,172 +521,6 @@
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
 
-  /* ── Trends tab ── */
-  .trends-controls {
-    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-    padding: 12px 16px; background: var(--color-background-secondary);
-    border: 1px solid var(--color-border-tertiary); border-radius: var(--border-radius-md);
-    margin-bottom: 16px;
-  }
-  .trends-controls .label {
-    font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em;
-    color: var(--color-text-tertiary);
-  }
-  .trends-controls select {
-    background: var(--color-background-tertiary); color: var(--color-text-primary);
-    border: 1px solid var(--color-border-secondary); border-radius: var(--border-radius-md);
-    padding: 6px 10px; font-family: var(--font-sans); font-size: 11px;
-    cursor: pointer;
-  }
-  .trends-capture-btn {
-    background: var(--color-text-info); color: #0f0f0f; border: none;
-    border-radius: var(--border-radius-md); padding: 7px 14px;
-    font-family: var(--font-sans); font-size: 10px; font-weight: 600;
-    text-transform: uppercase; letter-spacing: 0.08em; cursor: pointer;
-    transition: opacity 0.15s;
-  }
-  .trends-capture-btn:hover { opacity: 0.85; }
-  .trends-capture-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-  .trends-snapshot-list {
-    margin-left: auto; display: flex; align-items: center; gap: 6px;
-    font-size: 10px; color: var(--color-text-secondary);
-  }
-  .trends-empty {
-    padding: 40px 20px; text-align: center; color: var(--color-text-secondary);
-    background: var(--color-background-secondary);
-    border: 1px solid var(--color-border-tertiary); border-radius: var(--border-radius-md);
-  }
-  .trends-empty .big {
-    font-size: 14px; color: var(--color-text-primary); margin-bottom: 8px;
-  }
-  .trends-section {
-    background: var(--color-background-secondary);
-    border: 1px solid var(--color-border-tertiary); border-radius: var(--border-radius-md);
-    padding: 16px; margin-bottom: 16px;
-  }
-  .trends-section-title {
-    font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
-    color: var(--color-text-tertiary); margin-bottom: 12px;
-    padding-bottom: 8px; border-bottom: 1px solid var(--color-border-tertiary);
-  }
-  .trends-section-title .meta {
-    float: right; text-transform: none; letter-spacing: 0;
-    color: var(--color-text-secondary); font-weight: 400;
-  }
-  .trends-summary-grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 10px;
-  }
-  .trends-stat {
-    background: var(--color-background-tertiary); padding: 10px 12px;
-    border-radius: var(--border-radius-md); border: 1px solid var(--color-border-tertiary);
-  }
-  .trends-stat-label {
-    font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em;
-    color: var(--color-text-tertiary); margin-bottom: 4px;
-  }
-  .trends-stat-value { font-size: 14px; font-weight: 600; }
-  .trends-stat-sub { font-size: 10px; color: var(--color-text-secondary); margin-top: 2px; }
-  .trends-table {
-    width: 100%; border-collapse: collapse; font-size: 11px;
-  }
-  .trends-table th {
-    text-align: left; padding: 8px 10px; font-size: 9px;
-    text-transform: uppercase; letter-spacing: 0.08em;
-    color: var(--color-text-tertiary); font-weight: 600;
-    border-bottom: 1px solid var(--color-border-tertiary);
-  }
-  .trends-table th.r { text-align: right; }
-  .trends-table td {
-    padding: 8px 10px; border-bottom: 1px solid var(--color-border-tertiary);
-  }
-  .trends-table td.r { text-align: right; font-variant-numeric: tabular-nums; }
-  .trends-table tr:last-child td { border-bottom: none; }
-  .trends-table tr:hover td { background: var(--color-background-tertiary); }
-  .trends-tag {
-    display: inline-block; padding: 2px 6px; border-radius: 3px;
-    font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em;
-    margin-left: 6px;
-  }
-  .trends-tag.added { background: var(--color-background-info); color: var(--color-text-info); }
-  .trends-tag.sold { background: rgba(251, 191, 36, 0.12); color: #fbbf24; }
-  .trends-tag.gone { background: var(--color-background-danger); color: var(--color-text-danger); }
-  .trends-tag.shares { background: rgba(160, 160, 160, 0.12); color: var(--color-text-secondary); }
-  .trends-cross-up { color: var(--color-text-success); }
-  .trends-cross-down { color: var(--color-text-danger); }
-  .trends-snapshot-row {
-    display: flex; align-items: center; gap: 12px; padding: 8px 10px;
-    border-bottom: 1px solid var(--color-border-tertiary); font-size: 11px;
-  }
-  .trends-snapshot-row:last-child { border-bottom: none; }
-  .trends-snapshot-date { font-weight: 600; min-width: 100px; }
-  .trends-snapshot-meta { color: var(--color-text-secondary); flex: 1; }
-  .trends-snapshot-del {
-    background: transparent; border: 1px solid var(--color-border-secondary);
-    color: var(--color-text-tertiary); border-radius: 3px; padding: 2px 8px;
-    font-family: var(--font-sans); font-size: 9px; cursor: pointer;
-  }
-  .trends-snapshot-del:hover { color: var(--color-text-danger); border-color: var(--color-text-danger); }
-  .trends-section-cols {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
-  }
-  @media (max-width: 800px) {
-    .trends-section-cols { grid-template-columns: 1fr; }
-  }
-
-  /* ── Import Preview ── */
-  .import-section {
-    margin-bottom: 16px; border: 1px solid var(--color-border-tertiary);
-    border-radius: var(--border-radius-md); overflow: hidden;
-  }
-  .import-section-header {
-    background: var(--color-background-tertiary); padding: 8px 12px;
-    font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
-    font-weight: 600; display: flex; align-items: center; gap: 8px;
-  }
-  .import-section-header .count {
-    background: var(--color-background-secondary); padding: 1px 7px;
-    border-radius: 10px; font-size: 9px; color: var(--color-text-secondary);
-  }
-  .import-section.adds .import-section-header { color: var(--color-text-success); }
-  .import-section.matches .import-section-header { color: var(--color-text-info); }
-  .import-section.ambig .import-section-header { color: #fbbf24; }
-  .import-section.removes .import-section-header { color: var(--color-text-danger); }
-  .import-row {
-    padding: 10px 12px; border-top: 1px solid var(--color-border-tertiary);
-    font-size: 11px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  }
-  .import-row:first-child { border-top: none; }
-  .import-row .ticker {
-    font-weight: 700; min-width: 60px;
-  }
-  .import-row .acct {
-    color: var(--color-text-tertiary); font-size: 9px;
-    text-transform: uppercase; letter-spacing: 0.05em; min-width: 60px;
-  }
-  .import-row .detail {
-    flex: 1; min-width: 200px; color: var(--color-text-secondary); font-size: 10px;
-  }
-  .import-row .choice {
-    display: flex; gap: 10px;
-  }
-  .import-row .choice label {
-    display: flex; align-items: center; gap: 4px;
-    font-size: 10px; color: var(--color-text-secondary); cursor: pointer;
-  }
-  .import-row .choice input[type=radio] { cursor: pointer; }
-  .import-row .field-diff {
-    font-size: 9px; color: var(--color-text-tertiary);
-    width: 100%; margin-top: 4px;
-  }
-  .import-row .field-diff .changed {
-    color: var(--color-text-info); font-weight: 600;
-  }
-  .import-empty-note {
-    padding: 12px; font-size: 10px; color: var(--color-text-tertiary);
-    font-style: italic;
-  }
-
   /* Rebalance tab */
   .rebal-controls {
     display: flex; gap: 16px; align-items: center;
@@ -857,7 +691,6 @@
     <button class="tab-btn active" onclick="switchTab('dashboard')">Dashboard</button>
     <button class="tab-btn" onclick="switchTab('rebalance')">Rebalance &amp; Tax</button>
     <button class="tab-btn" onclick="switchTab('postsell')">Post-Sell Analysis</button>
-    <button class="tab-btn" onclick="switchTab('trends')">Trends</button>
   </div>
 
   <!-- Dashboard Tab -->
@@ -1220,35 +1053,9 @@
     <div class="postsell-cards" id="postsell-cards"></div>
   </div><!-- end tab-postsell -->
 
-  <!-- Trends Tab -->
-  <div class="tab-panel" id="tab-trends">
-    <div class="trends-controls">
-      <button class="trends-capture-btn" onclick="captureSnapshotManual()">+ Capture Snapshot</button>
-      <span class="label">Compare</span>
-      <select id="trends-select-b" onchange="renderTrends()"></select>
-      <span class="label">to</span>
-      <select id="trends-select-a" onchange="renderTrends()"></select>
-      <span class="trends-snapshot-list" id="trends-snapshot-count"></span>
-    </div>
-    <div id="trends-content"></div>
-  </div><!-- end tab-trends -->
-
 </div>
 
 <div id="save-note">Saved ✓</div>
-
-<!-- Import Preview Modal -->
-<div class="modal-overlay hidden" id="import-modal">
-  <div class="modal" style="max-width:720px;max-height:85vh;display:flex;flex-direction:column">
-    <div class="modal-title">Review Import</div>
-    <div class="modal-subtitle" id="import-modal-subtitle">Review what will change before committing.</div>
-    <div id="import-modal-body" style="overflow-y:auto;flex:1;margin-bottom:16px"></div>
-    <div class="modal-actions">
-      <button class="btn" onclick="cancelImport()">Cancel</button>
-      <button class="btn btn-primary" onclick="confirmImport()">Apply Import</button>
-    </div>
-  </div>
-</div>
 
 <!-- Sell Thesis Modal -->
 <div class="modal-overlay hidden" id="sell-modal">
@@ -1487,7 +1294,6 @@ let cashBuckets = { Taxable: 0, IRA: 0 };
 let cashLedger = [];
 let spLots = []; // { date, shares, pricePaid, account } — S&P passive core positions
 let spCurrentPrice = 0; // current VOO/SPY price, updated manually
-let snapshots = []; // { id, date, dateLocal, positions, spLots, cashBuckets, spxLive, spCurrentPrice, summary, autoCaptured }
 
 function mkPos() {
   return {
@@ -1511,31 +1317,20 @@ async function savePositions() {
     });
     const openPos = slim.filter(p => !p.closed);
     const closedPos = slim.filter(p => p.closed);
-
-    // Save sequentially with small delays to avoid rate limiting
-    await window.storage.set('portfolio-positions-v2', JSON.stringify({ positions: openPos, nextId, spxLive, spxLiveDate, cashBuckets }));
-    await window.storage.set('portfolio-positions-closed', JSON.stringify({ positions: closedPos }));
-    await window.storage.set('portfolio-sp-data', JSON.stringify({ spLots, spCurrentPrice }));
-    await window.storage.set('portfolio-ledger', JSON.stringify({ cashLedger }));
-    await window.storage.set('portfolio-snapshots', JSON.stringify({ snapshots }));
+    localStorage.setItem('portfolio-positions-v2', JSON.stringify({ positions: openPos, nextId, spxLive, spxLiveDate, cashBuckets }));
+    localStorage.setItem('portfolio-positions-closed', JSON.stringify({ positions: closedPos }));
+    localStorage.setItem('portfolio-sp-data', JSON.stringify({ spLots, spCurrentPrice }));
+    localStorage.setItem('portfolio-ledger', JSON.stringify({ cashLedger }));
     flashSave();
   } catch(e) {
     console.warn('Save failed', e.message);
-    // Retry once after a short delay
-    setTimeout(async () => {
-      try {
-        const slim = positions.map(p => { const { fetchState, priceToday, ...rest } = p; return rest; });
-        await window.storage.set('portfolio-positions-v2', JSON.stringify({ positions: slim.filter(p=>!p.closed), nextId, spxLive, spxLiveDate, cashBuckets }));
-        await window.storage.set('portfolio-positions-closed', JSON.stringify({ positions: slim.filter(p=>p.closed) }));
-        flashSave();
-      } catch(e2) { console.warn('Retry save failed', e2.message); }
-    }, 2000);
   }
 }
 
 async function loadPositions() {
   try {
-    const res = await window.storage.get('portfolio-positions-v2');
+    const raw = localStorage.getItem('portfolio-positions-v2');
+    const res = raw ? { value: raw } : null;
     if (res && res.value) {
       let parsed;
       try { parsed = JSON.parse(res.value); } catch(e) { console.warn('Parse failed', e); return; }
@@ -1553,7 +1348,7 @@ async function loadPositions() {
 
   // Load closed positions from separate key
   try {
-    const closedRes = await window.storage.get('portfolio-positions-closed');
+    const closedRes = (() => { const r = localStorage.getItem('portfolio-positions-closed'); return r ? { value: r } : null; })();
     if (closedRes && closedRes.value) {
       const cp = JSON.parse(closedRes.value);
       if (Array.isArray(cp.positions) && cp.positions.length > 0) {
@@ -1563,7 +1358,7 @@ async function loadPositions() {
   } catch(e) { /* no closed positions yet */ }
 
   try {
-    const ledgerRes = await window.storage.get('portfolio-ledger');
+    const ledgerRes = (() => { const r = localStorage.getItem('portfolio-ledger'); return r ? { value: r } : null; })();
     if (ledgerRes && ledgerRes.value) {
       const lp = JSON.parse(ledgerRes.value);
       if (Array.isArray(lp.cashLedger)) cashLedger = lp.cashLedger;
@@ -1571,21 +1366,13 @@ async function loadPositions() {
   } catch(e) { /* no ledger yet */ }
 
   try {
-    const spRes = await window.storage.get('portfolio-sp-data');
+    const spRes = (() => { const r = localStorage.getItem('portfolio-sp-data'); return r ? { value: r } : null; })();
     if (spRes && spRes.value) {
       const spParsed = JSON.parse(spRes.value);
       if (Array.isArray(spParsed.spLots)) spLots = spParsed.spLots;
       if (spParsed.spCurrentPrice) spCurrentPrice = spParsed.spCurrentPrice;
     }
   } catch(e) { /* sp data not yet saved */ }
-
-  try {
-    const snapRes = await window.storage.get('portfolio-snapshots');
-    if (snapRes && snapRes.value) {
-      const snapParsed = JSON.parse(snapRes.value);
-      if (Array.isArray(snapParsed.snapshots)) snapshots = snapParsed.snapshots;
-    }
-  } catch(e) { /* no snapshots yet */ }
 
   if (positions.length === 0) {
     positions = [mkPos(), mkPos(), mkPos()];
@@ -1942,7 +1729,7 @@ function renderRow(pos) {
     <td><input class="cell-input ticker-input" type="text" placeholder="AAPL" value="${esc(pos.ticker)}" onblur="setField(${pos.id},'ticker',this.value.toUpperCase())" oninput="this.value=this.value.toUpperCase()" ${isClosed?'disabled':''}></td>
     <td><input class="cell-input account-input" type="text" placeholder="Brokerage" value="${esc(pos.account)}" onblur="setField(${pos.id},'account',this.value)" ${isClosed?'disabled':''}></td>
     <td><input class="cell-input date-input" type="text" placeholder="YYYY-MM-DD" value="${esc(pos.dateBought)}" onblur="handleDateBlur(${pos.id},'dateBought',this)" ${isClosed?'disabled':''}></td>
-    <td class="calc-cell held-cell" style="text-align:center;white-space:nowrap">${(() => {
+    <td class="calc-cell" style="text-align:center;white-space:nowrap">${(() => {
       if (!pos.dateBought) return '<span class="dash">—</span>';
       const days = Math.floor((new Date() - new Date(pos.dateBought)) / 86400000);
       const label = days < 30 ? '< 1M' : days < 90 ? '1–3M' : days < 180 ? '3–6M' : days < 365 ? '6–12M' : days < 730 ? '1–2Y' : '2Y+';
@@ -2346,7 +2133,6 @@ function switchTab(name) {
   document.querySelector(`.tab-btn[onclick="switchTab('${name}')"]`).classList.add('active');
   if (name === 'rebalance') { renderSleevePerformance(); renderThemeIntel(); renderRebalance(); }
   if (name === 'postsell') renderPostSell();
-  if (name === 'trends') renderTrends();
   if (name === 'dashboard') syncFixedScrollbar();
 }
 
@@ -4938,9 +4724,9 @@ function updateRowCalcs(id) {
   else if (c.result === 'Trail') resultHtml = '<span class="result-badge result-trail">Trail</span>';
   else if (c.result === 'Tied') resultHtml = '<span class="result-badge result-tied">Tied</span>';
 
-  const cells = row.querySelectorAll('td.calc-cell:not(.held-cell)');
+  const cells = row.querySelectorAll('td.calc-cell');
   // calc cells are: invested, exitValue, gainLoss, yourReturn, spxReturn, vsSpx
-  // (the held-cell is excluded — it's a date-derived label, not a money value)
+  // They start after the input cells — find by index within calc-cells
   if (cells.length >= 6) {
     cells[0].innerHTML = c.invested > 0 ? fmtDollar(c.invested) : '<span class="dash">—</span>';
     cells[0].className = 'calc-cell';
@@ -5198,7 +4984,7 @@ function undoSell() {
 function exportData() {
   const data = {
     positions, nextId, spxLive, spxLiveDate, cashBuckets, cashLedger,
-    spLots, spCurrentPrice, snapshots, version: 2
+    spLots, spCurrentPrice, version: 1
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -5209,343 +4995,35 @@ function exportData() {
   URL.revokeObjectURL(url);
 }
 
-// ─────────────────────────────────────────────
-// Import — safer flow with preview/confirmation
-//
-// Behavior:
-//   - Parse JSON file
-//   - Categorize: adds (new), clean matches (1:1), ambiguous matches (>1 on either side), removals
-//   - If only adds (no matches, no ambiguity, no removals): import silently
-//   - Otherwise: show preview modal so user can choose per-position what to do
-// ─────────────────────────────────────────────
-
-// Pending import state, populated when user picks a file, consumed on confirm/cancel.
-let pendingImport = null;
-
-function posMatchKey(p) {
-  return `${p.ticker || ''}|${p.account || ''}|${p.dateBought || ''}`;
-}
-
-// Group an array of positions by match key. Returns Map<key, position[]>.
-function groupByKey(arr) {
-  const map = new Map();
-  arr.forEach(p => {
-    const k = posMatchKey(p);
-    if (!map.has(k)) map.set(k, []);
-    map.get(k).push(p);
-  });
-  return map;
-}
-
 function importData(input) {
   const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => {
-    let data;
+  reader.onload = async e => {
     try {
-      data = JSON.parse(e.target.result);
-    } catch(err) {
-      alert('Failed to parse — make sure you selected a valid JSON file.');
-      input.value = '';
-      return;
-    }
-    if (!data || !Array.isArray(data.positions)) {
-      alert('Invalid data file — missing positions array.');
-      input.value = '';
-      return;
-    }
-
-    // Reset the file input so the same file can be re-selected later
-    input.value = '';
-
-    // Analyze: categorize positions into adds, matches, ambiguous, removals.
-    // Compare only OPEN positions (closed positions are historical and shouldn't
-    // get clobbered by an import that only contains current open trades).
-    const currentOpen = positions.filter(p => !p.closed);
-    const fileOpen = data.positions.filter(p => !p.closed);
-
-    const curByKey = groupByKey(currentOpen);
-    const fileByKey = groupByKey(fileOpen);
-    const allKeys = new Set([...curByKey.keys(), ...fileByKey.keys()]);
-
-    const adds = [];          // [{ filePos }]
-    const matches = [];       // [{ key, currentPos, filePos, fields: [...] }]
-    const ambiguous = [];     // [{ key, currentArr, fileArr }]
-    const removals = [];      // [{ currentPos }]
-
-    allKeys.forEach(k => {
-      const cur = curByKey.get(k) || [];
-      const fil = fileByKey.get(k) || [];
-      if (cur.length === 0 && fil.length > 0) {
-        fil.forEach(fp => adds.push({ filePos: fp }));
-      } else if (cur.length > 0 && fil.length === 0) {
-        cur.forEach(cp => removals.push({ currentPos: cp }));
-      } else if (cur.length === 1 && fil.length === 1) {
-        // Clean 1:1 match — compute field-level diff
-        const curP = cur[0], filP = fil[0];
-        const fields = ['shares', 'pricePaid', 'exitPrice', 'spxBuy', 'theme', 'sleeve', 'notes'];
-        const diff = fields.map(f => ({
-          field: f,
-          currentVal: curP[f],
-          fileVal: filP[f],
-          changed: String(curP[f] || '') !== String(filP[f] || '')
-        }));
-        const anyChanged = diff.some(d => d.changed);
-        matches.push({ key: k, currentPos: curP, filePos: filP, diff, anyChanged });
-      } else {
-        // Multiple on at least one side — ambiguous, flag for manual review
-        ambiguous.push({ key: k, currentArr: cur, fileArr: fil });
-      }
-    });
-
-    const onlyAdds = matches.every(m => !m.anyChanged) && ambiguous.length === 0 && removals.length === 0;
-
-    pendingImport = {
-      data, adds, matches, ambiguous, removals,
-      // For each match: 'mine' (keep current) or 'file' (use file). Default: 'mine'
-      // unless nothing changed, in which case it doesn't matter.
-      matchChoices: matches.map(m => 'mine'),
-      // For each removal: 'keep' or 'remove'. Default 'keep' (safe).
-      removalChoices: removals.map(r => 'keep'),
-    };
-
-    if (onlyAdds) {
-      // Silent fast path
-      commitImport();
-    } else {
-      showImportModal();
+      const data = JSON.parse(e.target.result);
+      if (!data.positions) { alert('Invalid data file.'); return; }
+      positions = data.positions;
+      nextId = data.nextId || positions.length + 1;
+      if (data.spxLive) spxLive = data.spxLive;
+      if (data.spxLiveDate) spxLiveDate = data.spxLiveDate;
+      if (data.cashBuckets) cashBuckets = data.cashBuckets;
+      if (data.cashLedger) cashLedger = data.cashLedger;
+      if (data.spLots) spLots = data.spLots;
+      if (data.spCurrentPrice) spCurrentPrice = data.spCurrentPrice;
+      await savePositions();
+      restoreSpxInput();
+      renderAll();
+      renderSpBar();
+      renderSpSummary();
+      renderSleeveBreakdown();
+      renderSleeveRef();
+      alert('✓ Data imported successfully!');
+    } catch(e) {
+      alert('Failed to import — make sure you selected the right file.');
     }
   };
   reader.readAsText(file);
-}
-
-function showImportModal() {
-  const body = document.getElementById('import-modal-body');
-  const subtitle = document.getElementById('import-modal-subtitle');
-  if (!body || !pendingImport) return;
-
-  const { adds, matches, ambiguous, removals } = pendingImport;
-
-  // Subtitle summary
-  const parts = [];
-  if (adds.length) parts.push(`${adds.length} new`);
-  if (matches.length) parts.push(`${matches.length} match${matches.length === 1 ? '' : 'es'}`);
-  if (ambiguous.length) parts.push(`${ambiguous.length} ambiguous`);
-  if (removals.length) parts.push(`${removals.length} would be removed`);
-  subtitle.textContent = parts.join(' · ');
-
-  let html = '';
-
-  // Adds section
-  if (adds.length > 0) {
-    html += `<div class="import-section adds">
-      <div class="import-section-header">
-        <span>+ New positions to add</span>
-        <span class="count">${adds.length}</span>
-      </div>`;
-    adds.forEach(a => {
-      const p = a.filePos;
-      html += `<div class="import-row">
-        <div class="ticker">${esc(p.ticker)}</div>
-        <div class="acct">${esc(p.account)}</div>
-        <div class="detail">${esc(p.dateBought)} · ${esc(p.shares)} sh @ $${esc(p.pricePaid)}</div>
-      </div>`;
-    });
-    html += `</div>`;
-  }
-
-  // Matches section
-  if (matches.length > 0) {
-    html += `<div class="import-section matches">
-      <div class="import-section-header">
-        <span>≈ Existing positions in file (choose per-position)</span>
-        <span class="count">${matches.length}</span>
-      </div>`;
-    matches.forEach((m, idx) => {
-      const cp = m.currentPos, fp = m.filePos;
-      let diffSummary = '';
-      if (m.anyChanged) {
-        const changedFields = m.diff.filter(d => d.changed);
-        diffSummary = `<div class="field-diff">${changedFields.map(d =>
-          `<span class="changed">${d.field}</span>: ${esc(d.currentVal || '—')} → ${esc(d.fileVal || '—')}`
-        ).join(' · ')}</div>`;
-      } else {
-        diffSummary = `<div class="field-diff">No field changes — match is informational</div>`;
-      }
-      html += `<div class="import-row">
-        <div class="ticker">${esc(cp.ticker)}</div>
-        <div class="acct">${esc(cp.account)}</div>
-        <div class="detail">${esc(cp.dateBought)} · ${cp.shares} sh @ $${cp.pricePaid}</div>
-        <div class="choice">
-          <label><input type="radio" name="match-${idx}" value="mine" ${m.anyChanged ? '' : 'checked'} onchange="setMatchChoice(${idx},'mine')" ${m.anyChanged ? 'checked' : ''}> Keep mine</label>
-          <label><input type="radio" name="match-${idx}" value="file" onchange="setMatchChoice(${idx},'file')"> Use file</label>
-        </div>
-        ${diffSummary}
-      </div>`;
-    });
-    html += `</div>`;
-  }
-
-  // Ambiguous section
-  if (ambiguous.length > 0) {
-    html += `<div class="import-section ambig">
-      <div class="import-section-header">
-        <span>⚠ Same-day duplicates — please review manually after import</span>
-        <span class="count">${ambiguous.length}</span>
-      </div>`;
-    ambiguous.forEach(a => {
-      const cur = a.currentArr, fil = a.fileArr;
-      const sample = (cur[0] || fil[0]);
-      html += `<div class="import-row">
-        <div class="ticker">${esc(sample.ticker)}</div>
-        <div class="acct">${esc(sample.account)}</div>
-        <div class="detail">
-          ${esc(sample.dateBought)} · ${cur.length} in tracker, ${fil.length} in file
-          <div class="field-diff">Ambiguous: I can't tell which row in the file corresponds to which in the tracker. The file rows will be added as new positions; review and dedupe manually after import.</div>
-        </div>
-      </div>`;
-    });
-    html += `</div>`;
-  }
-
-  // Removals section
-  if (removals.length > 0) {
-    html += `<div class="import-section removes">
-      <div class="import-section-header">
-        <span>− Positions in tracker, not in file</span>
-        <span class="count">${removals.length}</span>
-      </div>`;
-    removals.forEach((r, idx) => {
-      const p = r.currentPos;
-      html += `<div class="import-row">
-        <div class="ticker">${esc(p.ticker)}</div>
-        <div class="acct">${esc(p.account)}</div>
-        <div class="detail">${esc(p.dateBought)} · ${p.shares} sh @ $${p.pricePaid}</div>
-        <div class="choice">
-          <label><input type="radio" name="rem-${idx}" value="keep" checked onchange="setRemovalChoice(${idx},'keep')"> Keep</label>
-          <label><input type="radio" name="rem-${idx}" value="remove" onchange="setRemovalChoice(${idx},'remove')"> Remove</label>
-        </div>
-      </div>`;
-    });
-    html += `</div>`;
-  }
-
-  if (!html) {
-    html = `<div class="import-empty-note">Nothing to import — file is empty or matches exactly.</div>`;
-  }
-
-  body.innerHTML = html;
-  document.getElementById('import-modal').classList.remove('hidden');
-}
-
-function setMatchChoice(idx, choice) {
-  if (pendingImport && pendingImport.matchChoices) {
-    pendingImport.matchChoices[idx] = choice;
-  }
-}
-
-function setRemovalChoice(idx, choice) {
-  if (pendingImport && pendingImport.removalChoices) {
-    pendingImport.removalChoices[idx] = choice;
-  }
-}
-
-function cancelImport() {
-  pendingImport = null;
-  document.getElementById('import-modal').classList.add('hidden');
-}
-
-async function commitImport() {
-  if (!pendingImport) return;
-  const { data, adds, matches, ambiguous, removals, matchChoices, removalChoices } = pendingImport;
-
-  // Build the new positions array:
-  //   - Start with all current CLOSED positions (always preserved — closed history is sacred)
-  //   - Add current open positions, but skip any in 'removals' marked 'remove'
-  //   - For matches marked 'file', replace the current position with the file version
-  //   - Add all 'adds' (new positions)
-  //   - Add all positions from ambiguous file-side groups (since we can't auto-merge)
-
-  const closedKeep = positions.filter(p => p.closed);
-
-  // Build a set of keys to remove
-  const removeKeys = new Set();
-  removals.forEach((r, i) => {
-    if (removalChoices[i] === 'remove') {
-      removeKeys.add(posMatchKey(r.currentPos));
-    }
-  });
-
-  // Build a map of match keys where file should replace current
-  const replaceByFile = new Map(); // key -> filePos
-  matches.forEach((m, i) => {
-    if (matchChoices[i] === 'file') {
-      replaceByFile.set(m.key, m.filePos);
-    }
-  });
-
-  // Walk current open positions
-  const openKept = positions.filter(p => !p.closed).map(p => {
-    const k = posMatchKey(p);
-    if (removeKeys.has(k)) return null;
-    if (replaceByFile.has(k)) {
-      const fp = replaceByFile.get(k);
-      // Preserve the existing id so other references remain stable
-      return { ...fp, id: p.id };
-    }
-    return p;
-  }).filter(p => p !== null);
-
-  // Add new positions (assign fresh IDs)
-  const newAdded = adds.map(a => ({ ...a.filePos, id: nextId++ }));
-
-  // Add ambiguous file-side rows as new positions (with fresh IDs).
-  // These will sit alongside the existing same-day duplicates; user resolves manually.
-  const ambigAdded = [];
-  ambiguous.forEach(a => {
-    a.fileArr.forEach(fp => {
-      ambigAdded.push({ ...fp, id: nextId++ });
-    });
-  });
-
-  positions = [...closedKeep, ...openKept, ...newAdded, ...ambigAdded];
-
-  // Apply other top-level fields from the file (preserving existing if file omits)
-  if (data.nextId && data.nextId > nextId) nextId = data.nextId;
-  if (data.spxLive) spxLive = data.spxLive;
-  if (data.spxLiveDate) spxLiveDate = data.spxLiveDate;
-  if (data.cashBuckets) cashBuckets = data.cashBuckets;
-  if (Array.isArray(data.cashLedger)) cashLedger = data.cashLedger;
-  if (Array.isArray(data.spLots)) spLots = data.spLots;
-  if (data.spCurrentPrice) spCurrentPrice = data.spCurrentPrice;
-  if (Array.isArray(data.snapshots)) snapshots = data.snapshots;
-
-  pendingImport = null;
-  document.getElementById('import-modal').classList.add('hidden');
-
-  await savePositions();
-  restoreSpxInput();
-  renderAll();
-  renderSpBar();
-  renderSpSummary();
-  renderSleeveBreakdown();
-  renderSleeveRef();
-
-  // Build a friendly summary
-  const summary = [];
-  if (newAdded.length) summary.push(`${newAdded.length} added`);
-  const fileWins = matches.filter((m, i) => matchChoices[i] === 'file').length;
-  if (fileWins) summary.push(`${fileWins} updated from file`);
-  const removed = removals.filter((r, i) => removalChoices[i] === 'remove').length;
-  if (removed) summary.push(`${removed} removed`);
-  if (ambigAdded.length) summary.push(`${ambigAdded.length} added as ambiguous (review manually)`);
-  if (summary.length === 0) summary.push('no changes');
-  alert(`✓ Import complete — ${summary.join(', ')}.`);
-}
-
-function confirmImport() {
-  commitImport();
 }
 
 function clearAll() {
@@ -5554,499 +5032,6 @@ function clearAll() {
   nextId = 1;
   renderAll();
   scheduleSave();
-}
-
-// ─────────────────────────────────────────────
-// Snapshots & Trends
-// ─────────────────────────────────────────────
-
-// Format an ISO date string (YYYY-MM-DD) for the user's local calendar day.
-// Used for "first visit each calendar day" auto-capture.
-function todayLocalDateStr() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-// Build the snapshot object — full deep copy of all state that drives metrics.
-function buildSnapshot(autoCaptured) {
-  const allPos = positions.map(p => ({ ...p }));
-  const summary = calcSummary(allPos.filter(p => !p.closed));
-  return {
-    id: Date.now(),                      // unique-enough; one per click/auto
-    date: new Date().toISOString(),      // full timestamp
-    dateLocal: todayLocalDateStr(),      // for "one per day" dedup
-    autoCaptured: !!autoCaptured,
-    positions: allPos,
-    spLots: spLots.map(l => ({ ...l })),
-    cashBuckets: { ...cashBuckets },
-    spxLive: spxLive,
-    spCurrentPrice: spCurrentPrice,
-    summary: summary
-  };
-}
-
-function captureSnapshotManual() {
-  const snap = buildSnapshot(false);
-  snapshots.push(snap);
-  scheduleSave();
-  renderTrends();
-  // Auto-select the new snapshot as "current" in the picker
-  const selB = document.getElementById('trends-select-b');
-  if (selB) selB.value = String(snap.id);
-  renderTrends();
-}
-
-// Auto-capture on first visit each calendar day, but only if there's actually
-// something to capture (at least one open position with shares & price).
-function maybeAutoCapture() {
-  const today = todayLocalDateStr();
-  const haveTodaySnap = snapshots.some(s => s.dateLocal === today);
-  if (haveTodaySnap) return;
-  const hasRealData = positions.some(p =>
-    !p.closed && parseFloat(p.shares) > 0 && parseFloat(p.pricePaid) > 0
-  );
-  if (!hasRealData) return;
-  const snap = buildSnapshot(true);
-  snapshots.push(snap);
-  scheduleSave();
-}
-
-function deleteSnapshot(id) {
-  if (!confirm('Delete this snapshot? This cannot be undone.')) return;
-  snapshots = snapshots.filter(s => s.id !== id);
-  scheduleSave();
-  renderTrends();
-}
-
-// Build a stable "key" for matching positions across snapshots.
-// Two positions are "the same position" if ticker + account + dateBought match.
-// (Same ticker bought on different dates are tracked as separate lots in this app,
-// so matching by all three preserves that distinction.)
-function posKey(p) {
-  return `${p.ticker}|${p.account}|${p.dateBought}`;
-}
-
-// Compute "exit value" for a position — same logic as calcPos but lighter,
-// since snapshots already contain the exit prices we want.
-function snapPosValue(p) {
-  const sh = parseFloat(p.shares);
-  const ep = parseFloat(p.exitPrice);
-  if (isNaN(sh) || isNaN(ep)) return 0;
-  return sh * ep;
-}
-function snapPosInvested(p) {
-  const sh = parseFloat(p.shares);
-  const pp = parseFloat(p.pricePaid);
-  if (isNaN(sh) || isNaN(pp)) return 0;
-  return sh * pp;
-}
-
-// Compute the dollar alpha for a single position at the time of a snapshot.
-// (Re-uses the same math as calcPos but on snapshot data.)
-function snapPosAlpha(p) {
-  const invested = snapPosInvested(p);
-  const exitVal = snapPosValue(p);
-  if (invested <= 0) return null;
-  const spxBuy = parseFloat(p.spxBuy);
-  const spxExit = parseFloat(p.spxExit);
-  if (isNaN(spxBuy) || isNaN(spxExit) || spxBuy <= 0) return null;
-  const spxReturn = ((spxExit / spxBuy) - 1);
-  const spxDollar = invested * spxReturn;
-  return (exitVal - invested) - spxDollar;
-}
-
-// "Beating S&P" boolean for a position in a snapshot.
-function snapPosBeating(p) {
-  const a = snapPosAlpha(p);
-  if (a === null) return null;
-  return a >= 0;
-}
-
-// Diff two snapshots A (older) and B (newer), returning a structured object.
-function diffSnapshots(snapA, snapB) {
-  // Index positions by key
-  const indexA = new Map();
-  const indexB = new Map();
-  (snapA.positions || []).filter(p => !p.closed).forEach(p => indexA.set(posKey(p), p));
-  (snapB.positions || []).filter(p => !p.closed).forEach(p => indexB.set(posKey(p), p));
-
-  const allKeys = new Set([...indexA.keys(), ...indexB.keys()]);
-
-  const movers = [];      // present in both snapshots — price-driven changes
-  const added = [];       // in B, not in A — newly opened
-  const removed = [];     // in A, not in B — closed/sold between snapshots
-  const sharesChanged = []; // in both, but share count changed — added to / trimmed
-
-  allKeys.forEach(k => {
-    const a = indexA.get(k);
-    const b = indexB.get(k);
-    if (a && b) {
-      const shA = parseFloat(a.shares) || 0;
-      const shB = parseFloat(b.shares) || 0;
-      if (shA !== shB) {
-        sharesChanged.push({ key: k, a, b, shA, shB, deltaShares: shB - shA });
-      }
-      const valA = snapPosValue(a);
-      const valB = snapPosValue(b);
-      const alphaA = snapPosAlpha(a);
-      const alphaB = snapPosAlpha(b);
-      const beatA = snapPosBeating(a);
-      const beatB = snapPosBeating(b);
-      movers.push({
-        key: k, a, b,
-        ticker: b.ticker, account: b.account,
-        valA, valB, deltaVal: valB - valA,
-        alphaA, alphaB,
-        deltaAlpha: (alphaA !== null && alphaB !== null) ? alphaB - alphaA : null,
-        beatA, beatB,
-        crossed: (beatA !== null && beatB !== null && beatA !== beatB) ? (beatB ? 'up' : 'down') : null,
-        sharesUnchanged: shA === shB
-      });
-    } else if (b && !a) {
-      added.push({ key: k, b });
-    } else if (a && !b) {
-      removed.push({ key: k, a });
-    }
-  });
-
-  // Headline numbers
-  const totA = (snapA.positions || []).filter(p => !p.closed).reduce((s, p) => s + snapPosValue(p), 0);
-  const totB = (snapB.positions || []).filter(p => !p.closed).reduce((s, p) => s + snapPosValue(p), 0);
-  const invA = (snapA.positions || []).filter(p => !p.closed).reduce((s, p) => s + snapPosInvested(p), 0);
-  const invB = (snapB.positions || []).filter(p => !p.closed).reduce((s, p) => s + snapPosInvested(p), 0);
-
-  // Total alpha sum across all positions
-  const alphaSumA = (snapA.positions || []).filter(p => !p.closed)
-    .map(snapPosAlpha).filter(x => x !== null).reduce((s, x) => s + x, 0);
-  const alphaSumB = (snapB.positions || []).filter(p => !p.closed)
-    .map(snapPosAlpha).filter(x => x !== null).reduce((s, x) => s + x, 0);
-
-  // Decompose total value change into "from new money" vs "from price"
-  // New money in (cost basis added): invB - invA, but only counting added/share-increase positions.
-  // This is approximate — it ignores the spx benchmark drift on the new money,
-  // but as a "where did the change come from" decomposition it's the standard approach.
-  const newMoneyIn = invB - invA;
-  const priceDriven = (totB - invB) - (totA - invA); // change in unrealized G/L
-
-  return {
-    snapA, snapB,
-    totA, totB, deltaTotal: totB - totA,
-    invA, invB, newMoneyIn,
-    priceDriven,
-    alphaSumA, alphaSumB, deltaAlpha: alphaSumB - alphaSumA,
-    movers, added, removed, sharesChanged
-  };
-}
-
-function fmtSnapDate(s) {
-  const d = new Date(s.date);
-  const opts = { year: 'numeric', month: 'short', day: 'numeric' };
-  return d.toLocaleDateString('en-US', opts);
-}
-function fmtSnapDateTime(s) {
-  const d = new Date(s.date);
-  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-}
-
-function renderTrends() {
-  const content = document.getElementById('trends-content');
-  const selA = document.getElementById('trends-select-a');
-  const selB = document.getElementById('trends-select-b');
-  const countEl = document.getElementById('trends-snapshot-count');
-  if (!content || !selA || !selB) return;
-
-  // Sort snapshots oldest -> newest for the picker
-  const sorted = [...snapshots].sort((x, y) => new Date(x.date) - new Date(y.date));
-
-  countEl.textContent = sorted.length === 0 ? 'No snapshots yet'
-    : sorted.length === 1 ? '1 snapshot'
-    : `${sorted.length} snapshots`;
-
-  // Empty state
-  if (sorted.length === 0) {
-    selA.innerHTML = '';
-    selB.innerHTML = '';
-    content.innerHTML = `
-      <div class="trends-empty">
-        <div class="big">No snapshots yet</div>
-        <div>Click <b>+ Capture Snapshot</b> to save the current state of your portfolio.</div>
-        <div style="margin-top:6px;font-size:10px;color:var(--color-text-tertiary)">Snapshots also auto-capture once per calendar day when you open the app.</div>
-      </div>`;
-    return;
-  }
-
-  // Populate dropdowns. selB defaults to newest; selA defaults to second-newest (or newest if only 1).
-  const prevA = selA.value;
-  const prevB = selB.value;
-  selA.innerHTML = sorted.map(s =>
-    `<option value="${s.id}">${fmtSnapDateTime(s)}${s.autoCaptured ? ' · auto' : ''}</option>`
-  ).join('');
-  selB.innerHTML = sorted.map(s =>
-    `<option value="${s.id}">${fmtSnapDateTime(s)}${s.autoCaptured ? ' · auto' : ''}</option>`
-  ).join('');
-
-  // Default selection: B = newest, A = second-newest
-  const newest = sorted[sorted.length - 1];
-  const secondNewest = sorted[sorted.length - 2];
-  selB.value = sorted.some(s => String(s.id) === prevB) ? prevB : String(newest.id);
-  if (secondNewest) {
-    selA.value = sorted.some(s => String(s.id) === prevA) ? prevA : String(secondNewest.id);
-  } else {
-    selA.value = String(newest.id);
-  }
-
-  if (sorted.length === 1) {
-    content.innerHTML = `
-      <div class="trends-empty">
-        <div class="big">One snapshot saved — capture another to see what's changed</div>
-        <div>The diff view becomes useful once you have at least 2 snapshots to compare.</div>
-      </div>
-      ${renderSnapshotListSection(sorted)}`;
-    return;
-  }
-
-  // Render the diff
-  const snapA = sorted.find(s => String(s.id) === selA.value);
-  const snapB = sorted.find(s => String(s.id) === selB.value);
-  if (!snapA || !snapB) {
-    content.innerHTML = `<div class="trends-empty">Select two snapshots to compare.</div>`;
-    return;
-  }
-
-  // If user picks them backwards (B older than A), we still compute A-as-older;
-  // swap so the math always reads "A is earlier, B is later".
-  let earlier = snapA, later = snapB;
-  if (new Date(snapA.date) > new Date(snapB.date)) {
-    earlier = snapB; later = snapA;
-  }
-  const diff = diffSnapshots(earlier, later);
-
-  content.innerHTML = `
-    ${renderDiffHeadline(diff)}
-    ${renderDiffMovers(diff)}
-    ${renderDiffComposition(diff)}
-    ${renderDiffCrossings(diff)}
-    ${renderSnapshotListSection(sorted)}
-  `;
-}
-
-function renderDiffHeadline(diff) {
-  const colTot = diff.deltaTotal >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
-  const colAlpha = diff.deltaAlpha >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
-  const colPrice = diff.priceDriven >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
-  const colMoney = diff.newMoneyIn === 0 ? 'var(--color-text-tertiary)' : 'var(--color-text-info)';
-  const days = Math.max(1, Math.round((new Date(diff.snapB.date) - new Date(diff.snapA.date)) / 86400000));
-  return `
-    <div class="trends-section">
-      <div class="trends-section-title">
-        Change <span class="meta">${fmtSnapDate(diff.snapA)} → ${fmtSnapDate(diff.snapB)} · ${days} day${days === 1 ? '' : 's'}</span>
-      </div>
-      <div class="trends-summary-grid">
-        <div class="trends-stat">
-          <div class="trends-stat-label">Total Value</div>
-          <div class="trends-stat-value">${fmtDollarWhole(diff.totB)}</div>
-          <div class="trends-stat-sub" style="color:${colTot}">${diff.deltaTotal >= 0 ? '+' : ''}${fmtDollarWhole(diff.deltaTotal)}</div>
-        </div>
-        <div class="trends-stat">
-          <div class="trends-stat-label">Price-Driven</div>
-          <div class="trends-stat-value" style="color:${colPrice}">${diff.priceDriven >= 0 ? '+' : ''}${fmtDollarWhole(diff.priceDriven)}</div>
-          <div class="trends-stat-sub">change in unrealized G/L</div>
-        </div>
-        <div class="trends-stat">
-          <div class="trends-stat-label">New Money</div>
-          <div class="trends-stat-value" style="color:${colMoney}">${diff.newMoneyIn >= 0 ? '+' : ''}${fmtDollarWhole(diff.newMoneyIn)}</div>
-          <div class="trends-stat-sub">cost basis added/removed</div>
-        </div>
-        <div class="trends-stat">
-          <div class="trends-stat-label">Total Alpha vs S&amp;P</div>
-          <div class="trends-stat-value">${fmtDollarWhole(diff.alphaSumB)}</div>
-          <div class="trends-stat-sub" style="color:${colAlpha}">${diff.deltaAlpha >= 0 ? '+' : ''}${fmtDollarWhole(diff.deltaAlpha)}</div>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function renderDiffMovers(diff) {
-  // Only positions that exist in both snapshots and had unchanged shares
-  // (so we're showing pure price moves). Sort by absolute value change.
-  const priceMovers = diff.movers.filter(m => m.sharesUnchanged && Math.abs(m.deltaVal) > 0.01);
-  priceMovers.sort((a, b) => Math.abs(b.deltaVal) - Math.abs(a.deltaVal));
-
-  if (priceMovers.length === 0) {
-    return `
-      <div class="trends-section">
-        <div class="trends-section-title">Position Movers <span class="meta">price only — no changes to flag</span></div>
-        <div style="color:var(--color-text-tertiary);font-size:11px;padding:8px 0">No measurable price-driven changes between these snapshots.</div>
-      </div>`;
-  }
-
-  const top = priceMovers.slice(0, 12);
-  const rows = top.map(m => {
-    const valColor = m.deltaVal >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
-    const alphaTxt = m.deltaAlpha === null ? '—' :
-      `<span style="color:${m.deltaAlpha >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)'}">${m.deltaAlpha >= 0 ? '+' : ''}${fmtDollarWhole(m.deltaAlpha)}</span>`;
-    let crossTag = '';
-    if (m.crossed === 'up')   crossTag = ' <span class="trends-tag added">→ beating</span>';
-    if (m.crossed === 'down') crossTag = ' <span class="trends-tag gone">→ trailing</span>';
-    return `
-      <tr>
-        <td><b>${m.ticker}</b> <span style="color:var(--color-text-tertiary);font-size:9px">${m.account}</span>${crossTag}</td>
-        <td class="r">${fmtDollarWhole(m.valA)}</td>
-        <td class="r">${fmtDollarWhole(m.valB)}</td>
-        <td class="r" style="color:${valColor}">${m.deltaVal >= 0 ? '+' : ''}${fmtDollarWhole(m.deltaVal)}</td>
-        <td class="r">${alphaTxt}</td>
-      </tr>`;
-  }).join('');
-
-  const more = priceMovers.length > 12 ? `<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:8px">+ ${priceMovers.length - 12} smaller movers not shown</div>` : '';
-
-  return `
-    <div class="trends-section">
-      <div class="trends-section-title">Position Movers <span class="meta">price-driven only · ${priceMovers.length} position${priceMovers.length === 1 ? '' : 's'}</span></div>
-      <table class="trends-table">
-        <thead>
-          <tr>
-            <th>Position</th>
-            <th class="r">Value (was)</th>
-            <th class="r">Value (now)</th>
-            <th class="r">Δ Value</th>
-            <th class="r">Δ Alpha</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-      ${more}
-    </div>
-  `;
-}
-
-function renderDiffComposition(diff) {
-  const hasAny = diff.added.length || diff.removed.length || diff.sharesChanged.length;
-  if (!hasAny) {
-    return `
-      <div class="trends-section">
-        <div class="trends-section-title">Composition Changes <span class="meta">positions you opened, closed, or resized</span></div>
-        <div style="color:var(--color-text-tertiary);font-size:11px;padding:8px 0">No composition changes between these snapshots.</div>
-      </div>`;
-  }
-
-  const addedRows = diff.added.map(x => {
-    const cost = snapPosInvested(x.b);
-    return `
-      <tr>
-        <td><b>${x.b.ticker}</b> <span style="color:var(--color-text-tertiary);font-size:9px">${x.b.account}</span> <span class="trends-tag added">opened</span></td>
-        <td class="r">${x.b.shares} sh @ ${fmtDollar(parseFloat(x.b.pricePaid))}</td>
-        <td class="r">${fmtDollarWhole(cost)}</td>
-      </tr>`;
-  }).join('');
-
-  const removedRows = diff.removed.map(x => {
-    const lastVal = snapPosValue(x.a);
-    return `
-      <tr>
-        <td><b>${x.a.ticker}</b> <span style="color:var(--color-text-tertiary);font-size:9px">${x.a.account}</span> <span class="trends-tag gone">closed</span></td>
-        <td class="r">${x.a.shares} sh</td>
-        <td class="r">${fmtDollarWhole(lastVal)}</td>
-      </tr>`;
-  }).join('');
-
-  const sharesRows = diff.sharesChanged.map(x => {
-    const verb = x.deltaShares > 0 ? 'added' : 'trimmed';
-    const tagClass = x.deltaShares > 0 ? 'added' : 'sold';
-    const sign = x.deltaShares > 0 ? '+' : '';
-    return `
-      <tr>
-        <td><b>${x.b.ticker}</b> <span style="color:var(--color-text-tertiary);font-size:9px">${x.b.account}</span> <span class="trends-tag ${tagClass}">${verb}</span></td>
-        <td class="r">${x.shA} → ${x.shB} sh</td>
-        <td class="r">${sign}${x.deltaShares} sh</td>
-      </tr>`;
-  }).join('');
-
-  const allRows = addedRows + sharesRows + removedRows;
-
-  return `
-    <div class="trends-section">
-      <div class="trends-section-title">Composition Changes <span class="meta">${diff.added.length} opened · ${diff.sharesChanged.length} resized · ${diff.removed.length} closed</span></div>
-      <table class="trends-table">
-        <thead>
-          <tr>
-            <th>Position</th>
-            <th class="r">Detail</th>
-            <th class="r">Amount</th>
-          </tr>
-        </thead>
-        <tbody>${allRows}</tbody>
-      </table>
-    </div>
-  `;
-}
-
-function renderDiffCrossings(diff) {
-  // Positions that flipped beat<->trail status between snapshots
-  const ups = diff.movers.filter(m => m.crossed === 'up');
-  const downs = diff.movers.filter(m => m.crossed === 'down');
-  if (ups.length === 0 && downs.length === 0) {
-    return `
-      <div class="trends-section">
-        <div class="trends-section-title">S&amp;P Crossings <span class="meta">positions that flipped beat ↔ trail</span></div>
-        <div style="color:var(--color-text-tertiary);font-size:11px;padding:8px 0">No positions crossed the S&amp;P benchmark between these snapshots.</div>
-      </div>`;
-  }
-  const upRows = ups.map(m => `
-    <tr>
-      <td><b>${m.ticker}</b> <span style="color:var(--color-text-tertiary);font-size:9px">${m.account}</span></td>
-      <td class="r trends-cross-up">trailing → beating</td>
-      <td class="r">${m.alphaA === null ? '—' : fmtDollarWhole(m.alphaA)} → ${m.alphaB === null ? '—' : fmtDollarWhole(m.alphaB)}</td>
-    </tr>`).join('');
-  const downRows = downs.map(m => `
-    <tr>
-      <td><b>${m.ticker}</b> <span style="color:var(--color-text-tertiary);font-size:9px">${m.account}</span></td>
-      <td class="r trends-cross-down">beating → trailing</td>
-      <td class="r">${m.alphaA === null ? '—' : fmtDollarWhole(m.alphaA)} → ${m.alphaB === null ? '—' : fmtDollarWhole(m.alphaB)}</td>
-    </tr>`).join('');
-  return `
-    <div class="trends-section">
-      <div class="trends-section-title">S&amp;P Crossings <span class="meta">${ups.length} flipped to beating · ${downs.length} flipped to trailing</span></div>
-      <table class="trends-table">
-        <thead>
-          <tr>
-            <th>Position</th>
-            <th class="r">Direction</th>
-            <th class="r">Alpha (was → now)</th>
-          </tr>
-        </thead>
-        <tbody>${upRows}${downRows}</tbody>
-      </table>
-    </div>
-  `;
-}
-
-function renderSnapshotListSection(sorted) {
-  // Show newest first
-  const list = [...sorted].reverse();
-  const rows = list.map(s => {
-    const totVal = (s.positions || []).filter(p => !p.closed).reduce((acc, p) => acc + snapPosValue(p), 0);
-    return `
-      <div class="trends-snapshot-row">
-        <div class="trends-snapshot-date">${fmtSnapDateTime(s)}</div>
-        <div class="trends-snapshot-meta">
-          ${(s.positions || []).filter(p => !p.closed).length} positions · ${fmtDollarWhole(totVal)}
-          ${s.autoCaptured ? ' · <span style="color:var(--color-text-tertiary)">auto</span>' : ''}
-        </div>
-        <button class="trends-snapshot-del" onclick="deleteSnapshot(${s.id})">Delete</button>
-      </div>
-    `;
-  }).join('');
-  return `
-    <div class="trends-section">
-      <div class="trends-section-title">All Snapshots <span class="meta">${sorted.length} saved</span></div>
-      ${rows}
-    </div>
-  `;
 }
 
 // ─────────────────────────────────────────────
@@ -6208,12 +5193,10 @@ async function init() {
   renderSleeveBreakdown();
   renderSleeveRef();
   renderAll();
-  // After all data is loaded and rendered, attempt the daily auto-snapshot.
-  // Done last so summary numbers reflect any seed/migration changes.
-  maybeAutoCapture();
 }
 
 init();
 </script>
 </body>
 </html>
+```
