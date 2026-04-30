@@ -1173,8 +1173,8 @@
         <div style="font-weight:700;color:#34d399">Quality</div>
         <div style="font-size:10px;color:var(--color-text-tertiary);margin-top:2px">Exceptional businesses held long term</div>
       </button>
-      <button class="btn" style="text-align:left;padding:10px 14px" onclick="pickStrategy('Ballast')">
-        <div style="font-weight:700;color:#60a5fa">Ballast</div>
+      <button class="btn" style="text-align:left;padding:10px 14px" onclick="pickStrategy('Portfolio Balance Plays')">
+        <div style="font-weight:700;color:#60a5fa">Portfolio Balance Plays</div>
         <div style="font-size:10px;color:var(--color-text-tertiary);margin-top:2px">Non-correlated, portfolio construction</div>
       </button>
       <button class="btn" style="margin-top:4px" onclick="pickStrategy('')">Skip — tag later</button>
@@ -1212,17 +1212,18 @@
       </select>
     </div>
 
-    <!-- Ballast strategy: ballast role -->
-    <div class="modal-field" id="ballast-role-wrap" style="display:none">
-      <label class="modal-label">What job is this doing?</label>
-      <select class="modal-select" id="ballast-role">
+    <!-- Portfolio Balance Plays strategy: balance flavor (opt-in vs structural) -->
+    <div class="modal-field" id="balance-flavor-wrap" style="display:none">
+      <label class="modal-label">What kind of balance play?</label>
+      <select class="modal-select" id="balance-flavor">
         <option value="">— Select —</option>
-        <option value="Inflation hedge">Inflation hedge</option>
-        <option value="Uncorrelated return">Uncorrelated return</option>
-        <option value="Volatility dampener">Volatility dampener</option>
-        <option value="Sector diversification">Sector diversification</option>
-        <option value="Energy transition">Energy transition</option>
+        <option value="opt-in">Opt-in — subject to S&P discipline (36-month soak)</option>
+        <option value="structural">Structural — held without performance discipline</option>
       </select>
+      <div style="font-size:9px;color:var(--color-text-tertiary);margin-top:4px;line-height:1.5">
+        <strong>Opt-in</strong>: you're betting this beats the index. Compared vs SPX after a 36-month soak.<br>
+        <strong>Structural</strong>: held for portfolio construction reasons (correlation, hedging) regardless of S&P performance.
+      </div>
     </div>
 
     <div class="modal-field" style="display:flex;align-items:center;gap:10px">
@@ -1386,6 +1387,28 @@ async function loadPositions() {
 
   if (positions.length === 0) {
     positions = [mkPos(), mkPos(), mkPos()];
+  }
+
+  // Run v1 → v2 migration on existing data (idempotent — only does work if needed)
+  migratePositionsV1ToV2();
+}
+
+// ─────────────────────────────────────────────
+// Schema migration v1 → v2
+// Idempotent: safe to call repeatedly. Only does work if v1 data is detected.
+// Renames sleeve "Ballast" → "Portfolio Balance Plays" and adds balanceFlavor:"structural".
+// ─────────────────────────────────────────────
+function migratePositionsV1ToV2() {
+  let migrated = 0;
+  positions.forEach(p => {
+    if (p.sleeve === 'Ballast') {
+      p.sleeve = 'Portfolio Balance Plays';
+      if (!p.balanceFlavor) p.balanceFlavor = 'structural';
+      migrated++;
+    }
+  });
+  if (migrated > 0) {
+    console.log(`Migrated ${migrated} position(s) from Ballast → Portfolio Balance Plays (structural)`);
   }
 }
 
@@ -3213,20 +3236,20 @@ function showThesisModal(note) {
   document.getElementById('thesis-tag').value = '';
   document.getElementById('thesis-tag-custom').value = '';
   if (document.getElementById('thesis-is-etf')) document.getElementById('thesis-is-etf').checked = false;
-  if (document.getElementById('ballast-role')) document.getElementById('ballast-role').value = '';
+  if (document.getElementById('balance-flavor')) document.getElementById('balance-flavor').value = '';
 
   // Determine pending strategy from the position about to be created
   // We detect it from the last position in the tickerSleeveMap or leave generic
   const thesisTagWrap = document.getElementById('thesis-tag-wrap');
   const qualityWrap = document.getElementById('quality-rationale-wrap');
-  const ballastWrap = document.getElementById('ballast-role-wrap');
+  const balanceWrap = document.getElementById('balance-flavor-wrap');
   const whyLabel = document.getElementById('thesis-why-label');
   const title = document.getElementById('thesis-modal-title');
 
   // Hide all strategy-specific fields initially
   thesisTagWrap.style.display = 'none';
   qualityWrap.style.display = 'none';
-  ballastWrap.style.display = 'none';
+  balanceWrap.style.display = 'none';
 
   // We'll detect strategy from the capital modal selection or leave generic
   // Store the pending strategy so confirmThesis can read it
@@ -3240,10 +3263,10 @@ function showThesisModal(note) {
     title.textContent = 'New Position — Quality';
     whyLabel.textContent = 'Why is this a quality business worth owning?';
     qualityWrap.style.display = 'block';
-  } else if (pendingStrategy === 'Ballast') {
-    title.textContent = 'New Position — Ballast';
+  } else if (pendingStrategy === 'Portfolio Balance Plays') {
+    title.textContent = 'New Position — Portfolio Balance Play';
     whyLabel.textContent = 'What role does this play in the portfolio?';
-    ballastWrap.style.display = 'block';
+    balanceWrap.style.display = 'block';
   } else {
     title.textContent = 'New Position — Investment Thesis';
     whyLabel.textContent = 'Why will this beat the S&P?';
@@ -4144,8 +4167,8 @@ function renderDashboardThemeSpotlight() {
     // Strategy-aware time gates
     // Quality: 60-day floor + big swing override
     // Thesis Plays: 180-day hard floor, no override
-    // Ballast: excluded from all negative signals entirely
-    const isAllBallast = d.tickers.length > 0 && d.tickers.every(t => t.sleeve === 'Ballast');
+    // Portfolio Balance Plays: excluded from all negative signals entirely
+    const isAllBalance = d.tickers.length > 0 && d.tickers.every(t => t.sleeve === 'Portfolio Balance Plays');
     const hasThesis = d.tickers.some(t => t.sleeve === 'Thesis Plays');
     const hasQuality = d.tickers.some(t => t.sleeve === 'Quality');
 
@@ -4153,8 +4176,8 @@ function renderDashboardThemeSpotlight() {
     const matureEnough = d.maxDays >= SIX_MONTHS;
     const bigSwing = alpha !== null && (alpha <= BIG_NEGATIVE_ALPHA || alpha >= BIG_POSITIVE_ALPHA);
 
-    // If entirely Ballast — skip all negative signals
-    if (isAllBallast) return;
+    // If entirely Portfolio Balance Plays — skip all negative signals
+    if (isAllBalance) return;
 
     let timeQualifies;
     if (hasThesis && !hasQuality) {
@@ -4280,8 +4303,8 @@ function renderDashboardThemeSpotlight() {
         sublabel: 'Negative alpha concentrated in IRA — cannot harvest', score });
     }
 
-    // 8. Carrying the Portfolio — 6 month gate, exclude Ballast
-    if (!isAllBallast && (matureEnough || alpha >= BIG_POSITIVE_ALPHA) && d.maxDays >= HARD_MIN_DAYS && alpha !== null && alpha > 2000 && alphaPerDollar !== null && alphaPerDollar > 0.05) {
+    // 8. Carrying the Portfolio — 6 month gate, exclude Portfolio Balance Plays
+    if (!isAllBalance && (matureEnough || alpha >= BIG_POSITIVE_ALPHA) && d.maxDays >= HARD_MIN_DAYS && alpha !== null && alpha > 2000 && alphaPerDollar !== null && alphaPerDollar > 0.05) {
       signals.push({ name, color, d, alpha, pct, realGl,
         label: 'Carrying the Portfolio', borderColor: 'var(--color-text-success)',
         sublabel: 'Exceptional alpha — significantly outpacing the index',
@@ -4352,18 +4375,18 @@ function renderDashboardThemeSpotlight() {
 
 
 
-const SLEEVES = ['Thesis Plays', 'Quality', 'Ballast'];
+const SLEEVES = ['Thesis Plays', 'Quality', 'Portfolio Balance Plays'];
 const SLEEVE_TARGETS = {
   'Thesis Plays':  { min: 15, max: 25 },
   'Quality': { min: 15, max: 20 },
-  'Ballast': { min: 5,  max: 10 },
+  'Portfolio Balance Plays': { min: 5,  max: 10 },
 };
 
 // Sleeve colour palette
 const SLEEVE_COLORS = {
   'Thesis Plays':  '#f59e0b',
   'Quality': '#34d399',
-  'Ballast': '#60a5fa',
+  'Portfolio Balance Plays': '#60a5fa',
 };
 
 const THEME_COLORS = {
@@ -4385,10 +4408,9 @@ const THEME_COLORS = {
 };
 
 // ─────────────────────────────────────────────
-// Benchmark Map — locked design, see benchmark-design.docx
-// Each theme/sleeve maps to its discipline benchmark.
-// null = no per-position discipline (Thesis Plays, Portfolio Balance Plays sleeve).
-// Phase 2 Step 2A: lookup tables only — nothing consumes these yet.
+// Benchmark Map (LOCKED IN — do not adjust)
+// Locked from design session. Each theme/sleeve maps to its primary benchmark ETF.
+// "Picking flattering benchmarks defeats the purpose" — these do not change.
 // ─────────────────────────────────────────────
 const BENCHMARKS = {
   themes: {
@@ -4400,36 +4422,23 @@ const BENCHMARKS = {
     'Energy & Grid':     'XLE',
     'Commodities':       'GLD',
     'Consumer':          'XLY',
-    'Space & Defense':   'ITA',
-    // Themes without a locked benchmark fall through to null.
-    // Add cautiously — only when we've decided the right ETF.
-    'Biotech & Health':  null,
-    'Real Estate':       null,
-    'Emerging Markets':  null,
-    'Broad ETF':         null,
-    'Fixed Income':      null,
-    'Other':             null,
+    'Space & Defense':   'ITA'
   },
   sleeves: {
-    'Quality':       'SPHQ',
-    'Thesis Plays':  null,  // no sleeve-level benchmark; per-theme alphas only
-    'Ballast':       'SPX', // Portfolio Balance Plays — per-position opt-in
+    'Quality':                 'SPHQ',
+    'Thesis Plays':            null,   // no aggregate benchmark — per-theme alphas only
+    'Portfolio Balance Plays': 'SPX'   // per-position opt-in vs structural; opt-in compares to SPX
   }
 };
 
-// Returns benchmark ticker for a theme, or null if none locked.
-function getThemeBenchmark(theme) {
-  if (!theme) return null;
-  return BENCHMARKS.themes[theme] ?? null;
+function getThemeBenchmark(themeName) {
+  if (!themeName) return undefined;
+  return BENCHMARKS.themes[themeName];
 }
 
-// Returns benchmark ticker for a sleeve, or null if none locked.
-// NOTE: 'Ballast' sleeve will be renamed to 'Portfolio Balance Plays' in Step 2B.
-// Until then, lookups by either string need to resolve to the same value.
-function getSleeveBenchmark(sleeve) {
-  if (!sleeve) return null;
-  if (sleeve === 'Portfolio Balance Plays') return BENCHMARKS.sleeves['Ballast'];
-  return BENCHMARKS.sleeves[sleeve] ?? null;
+function getSleeveBenchmark(sleeveName) {
+  if (!sleeveName) return undefined;
+  return BENCHMARKS.sleeves[sleeveName];
 }
 
 function renderConcentration() {
@@ -4860,6 +4869,7 @@ function confirmThesis() {
   const pendingStrategy = window._pendingStrategy || '';
 
   let stratNote = '';
+  let balanceFlavor = null;
   if (pendingStrategy === 'Thesis Plays') {
     const tag = document.getElementById('thesis-tag-custom').value.trim() ||
                 document.getElementById('thesis-tag').value;
@@ -4867,9 +4877,8 @@ function confirmThesis() {
   } else if (pendingStrategy === 'Quality') {
     const rationale = document.getElementById('quality-rationale').value;
     if (rationale) stratNote = `Quality rationale: ${rationale}`;
-  } else if (pendingStrategy === 'Ballast') {
-    const role = document.getElementById('ballast-role').value;
-    if (role) stratNote = `Ballast role: ${role}`;
+  } else if (pendingStrategy === 'Portfolio Balance Plays') {
+    balanceFlavor = document.getElementById('balance-flavor').value || null;
   }
 
   let note = stratNote;
@@ -4878,15 +4887,18 @@ function confirmThesis() {
   if (exit) note += (note ? ' | ' : '') + `Exit if: ${exit}`;
 
   const isETF = document.getElementById('thesis-is-etf')?.checked || false;
+  const sleeve = pendingStrategy || '';
   window._pendingStrategy = '';
   document.getElementById('thesis-modal').classList.add('hidden');
-  createNewPosition(note, isETF);
+  createNewPosition(note, isETF, sleeve, balanceFlavor);
 }
 
-function createNewPosition(note, isETF = false) {
+function createNewPosition(note, isETF = false, sleeve = '', balanceFlavor = null) {
   const p = mkPos();
   p.notes = note;
   p.isETF = isETF;
+  if (sleeve) p.sleeve = sleeve;
+  if (balanceFlavor) p.balanceFlavor = balanceFlavor;
   if (spxLive) p.spxExit = spxLive.toFixed(2);
   positions.push(p);
   renderAll();
@@ -5042,7 +5054,9 @@ function undoSell() {
 function exportData() {
   const data = {
     positions, nextId, spxLive, spxLiveDate, cashBuckets, cashLedger,
-    spLots, spCurrentPrice, version: 1
+    spLots, spCurrentPrice,
+    version: "2.0",
+    benchmarks: BENCHMARKS
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -5069,6 +5083,8 @@ function importData(input) {
       if (data.cashLedger) cashLedger = data.cashLedger;
       if (data.spLots) spLots = data.spLots;
       if (data.spCurrentPrice) spCurrentPrice = data.spCurrentPrice;
+      // Run v1 → v2 migration on imported data (idempotent)
+      migratePositionsV1ToV2();
       await savePositions();
       restoreSpxInput();
       renderAll();
@@ -5166,7 +5182,7 @@ async function init() {
     'MSFT': 'Quality', 'AMZN': 'Quality', 'AAPL': 'Quality',
     'V': 'Quality', 'AXP': 'Quality', 'BRK-B': 'Quality',
     'MS': 'Quality', 'SOFI': 'Quality', 'NFLX': 'Quality',
-    'GLD': 'Ballast', 'GRID': 'Ballast', 'WMB': 'Ballast',
+    'GLD': 'Portfolio Balance Plays', 'GRID': 'Portfolio Balance Plays', 'WMB': 'Portfolio Balance Plays',
     'CRWV': 'Thesis Plays', 'SMH': 'Thesis Plays', 'DRAM': 'Thesis Plays',
     'NASA': 'Thesis Plays', 'RKLB': 'Thesis Plays',
     'ORCL': 'Thesis Plays', 'PANW': 'Thesis Plays', 'CRWD': 'Thesis Plays',
@@ -5257,3 +5273,4 @@ init();
 </script>
 </body>
 </html>
+```
