@@ -666,11 +666,11 @@
       1. Get new file from Claude<br>
       2. Open it in browser → Command+S to save<br>
       3. Make sure filename is exactly <span style="color:var(--color-text-info)">portfolio-tracker.html</span><br>
-      4. Go to <span style="color:var(--color-text-info)">github.com/mishafitz/Portfolio-Tracker</span><br>
+      4. Go to <span style="color:var(--color-text-info)">github.com/Tracker1122/Portfolio-Tracker</span><br>
       5. Click + → Upload files → drag file in<br>
       6. Click green Commit changes<br>
       7. Wait 60 seconds<br>
-      8. Refresh <span style="color:var(--color-text-info)">mishafitz.github.io/Portfolio-Tracker/portfolio-tracker.html</span>
+      8. Refresh <span style="color:var(--color-text-info)">tracker1122.github.io/Portfolio-Tracker/portfolio-tracker.html</span>
     </div>
     <div style="font-size:9px;color:var(--color-text-tertiary);margin-top:8px">Your data stays — no export/import needed for updates</div>
     <button onclick="document.getElementById('update-instructions').style.display='none'" style="margin-top:10px;background:none;border:1px solid var(--color-border-tertiary);color:var(--color-text-tertiary);border-radius:4px;padding:3px 10px;cursor:pointer;font-size:10px">Close</button>
@@ -933,7 +933,7 @@
             <th>Held</th>
             <th class="r">Shares</th>
             <th class="r">Price Paid</th>
-            <th class="r">Current Price</th>
+            <th class="r">Last Price</th>
             <th>Sell Date</th>
             <th class="r">S&P Buy</th>
             <th class="r">S&P Exit</th>
@@ -1391,6 +1391,28 @@ async function loadPositions() {
 
   // Run v1 → v2 migration on existing data (idempotent — only does work if needed)
   migratePositionsV1ToV2();
+
+  // Cleanup: remove fully-empty placeholder positions (legacy from initial seed).
+  // Only deletes rows where every meaningful field is blank — won't touch drafts.
+  cleanEmptyPlaceholders();
+}
+
+// ─────────────────────────────────────────────
+// One-time cleanup: drop fully-empty placeholder rows.
+// A position is "fully empty" only if ticker, shares, pricePaid, notes, theme,
+// AND sleeve are all blank. Idempotent — safe to call repeatedly.
+// ─────────────────────────────────────────────
+function cleanEmptyPlaceholders() {
+  const before = positions.length;
+  positions = positions.filter(p => {
+    const isEmpty = !p.ticker && !p.shares && !p.pricePaid &&
+                    !p.notes && !p.theme && !p.sleeve;
+    return !isEmpty;
+  });
+  const removed = before - positions.length;
+  if (removed > 0) {
+    console.log(`Removed ${removed} empty placeholder row(s)`);
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -2763,16 +2785,54 @@ async function refreshAllPrices() {
     } catch(e) { return { ticker, price: null }; }
   }
 
-  const batchSize = 2;
-  const results = [];
-  for (let i = 0; i < tickers.length; i += batchSize) {
-    const batch = tickers.slice(i, i + batchSize);
-    const batchResults = await Promise.all(batch.map(fetchTicker));
-    results.push(...batchResults);
-    status.textContent = `Updated ${Math.min(i + batchSize, tickers.length)} of ${tickers.length}...`;
-    if (i + batchSize < tickers.length) await new Promise(r => setTimeout(r, 25000));
+  // Try fetching SPX from Yahoo Finance — best effort, falls through silently if blocked
+  async function tryFetchSpx() {
+    try {
+      const result = await fetchSpxLive();
+      if (result && result.price > 0) return result.price;
+    } catch(e) { /* CORS or network — fall through */ }
+    return null;
   }
 
+  // Polygon free tier: empirically, 5/min total-bricks the call. Stick with what works.
+  const batchSize = 2;
+  const waitMs = 25000;
+
+  async function runBatches(tickerList, isRetry) {
+    const out = [];
+    for (let i = 0; i < tickerList.length; i += batchSize) {
+      const batch = tickerList.slice(i, i + batchSize);
+      const batchResults = await Promise.all(batch.map(fetchTicker));
+      out.push(...batchResults);
+      const done = Math.min(i + batchSize, tickerList.length);
+      const failedSoFar = out.filter(r => !r.price).map(r => r.ticker);
+      const prefix = isRetry ? 'Retrying — ' : '';
+      let msg = `${prefix}${done}/${tickerList.length} fetched`;
+      if (failedSoFar.length > 0 && !isRetry) msg += ` · ${failedSoFar.length} failed so far`;
+      status.textContent = msg;
+      if (i + batchSize < tickerList.length) await new Promise(r => setTimeout(r, waitMs));
+    }
+    return out;
+  }
+
+  // Fire SPX fetch in parallel with the first batch — non-blocking, runs while Polygon batches go
+  const spxPromise = tryFetchSpx();
+
+  // First pass
+  let results = await runBatches(tickers, false);
+
+  // Retry failed tickers once after a 60s cooldown (rate limit window resets)
+  const failedFirst = results.filter(r => !r.price).map(r => r.ticker);
+  if (failedFirst.length > 0) {
+    status.textContent = `${results.length - failedFirst.length}/${tickers.length} done · waiting ${waitMs/1000}s before retrying ${failedFirst.length}…`;
+    await new Promise(r => setTimeout(r, waitMs));
+    const retryResults = await runBatches(failedFirst, true);
+    // Merge: replace failed entries with retry results
+    const retryMap = new Map(retryResults.map(r => [r.ticker, r]));
+    results = results.map(r => retryMap.has(r.ticker) ? retryMap.get(r.ticker) : r);
+  }
+
+  // Apply prices
   let updated = 0, failed = [];
   results.forEach(({ ticker, price }) => {
     if (!price) { failed.push(ticker); return; }
@@ -2780,31 +2840,58 @@ async function refreshAllPrices() {
       spCurrentPrice = price;
       const el = document.getElementById('sp-price-input');
       if (el) el.value = price.toFixed(2);
-      renderSpBar(); renderSpSummary();
     } else {
       openPositions.filter(p => p.ticker === ticker).forEach(p => { p.exitPrice = price.toFixed(2); });
       updated++;
     }
   });
 
+  // Apply SPX result if it succeeded
+  const spxResult = await spxPromise;
+  let spxUpdated = false;
+  if (spxResult && spxResult > 0) {
+    spxLive = spxResult;
+    spxLiveDate = new Date().toISOString();
+    positions.forEach(p => { if (!p.closed) p.spxExit = spxResult.toFixed(2); });
+    const spxInput = document.getElementById('spx-manual-input');
+    if (spxInput) spxInput.value = spxResult.toFixed(2);
+    spxUpdated = true;
+  } else if (spCurrentPrice > 0) {
+    // SPX fetch failed — fall back to bumping spxLiveDate based on VOO success.
+    // The SPX number itself stays whatever the user last entered, but the staleness
+    // indicator resets because we know markets did update (VOO moved).
+    spxLiveDate = new Date().toISOString();
+  }
+  renderStaleness();
+
   btn.disabled = false; btn.textContent = '\u27f3 Refresh Prices';
+  const ts = new Date().toLocaleTimeString();
+  let extra = '';
+  if (spxUpdated) extra = ' · SPX updated';
+  else if (spxResult === null) extra = ' · SPX manual';
   if (failed.length === 0) {
-    status.textContent = `\u2713 All ${updated} positions updated \u00b7 ${new Date().toLocaleTimeString()}`;
+    status.textContent = `\u2713 All ${updated} positions updated${extra} \u00b7 ${ts}`;
     status.style.color = 'var(--color-text-success)';
   } else if (updated > 0) {
-    status.textContent = `\u2713 ${updated} updated \u00b7 ${failed.join(', ')} failed`;
+    status.textContent = `\u2713 ${updated}/${tickers.length} updated${extra} \u00b7 Failed: ${failed.join(', ')}`;
     status.style.color = '#fbbf24';
   } else {
-    status.textContent = 'Failed \u2014 check API key or try again';
+    status.textContent = 'Failed \u2014 check API key, network, or try again';
     status.style.color = 'var(--color-text-danger)';
   }
   renderAll(); scheduleSave();
-  setTimeout(() => { if (status) { status.textContent = ''; status.style.color = ''; } }, 15000);
+  setTimeout(() => { if (status) { status.textContent = ''; status.style.color = ''; } }, 20000);
 }
 
 
 function setSpPrice(val) {
-  spCurrentPrice = parseFloat(val) || 0;
+  // Don't clobber a real price with 0 when the field is briefly empty during typing.
+  // Only update if we got a positive number; ignore empty/blank/non-positive input.
+  const s = String(val).trim();
+  if (s === '') return;
+  const n = parseFloat(s);
+  if (isNaN(n) || n <= 0) return;
+  spCurrentPrice = n;
   renderSpBar();
   renderSpSummary();
   scheduleSave();
