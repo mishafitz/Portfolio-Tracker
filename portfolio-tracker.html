@@ -4984,7 +4984,8 @@ function renderIndustryRef() {
         <span style="font-size:9px;font-weight:700;color:var(--color-text-primary);text-transform:uppercase;letter-spacing:0.08em">${esc(theme)}</span>
         ${headerRight}
       </div>
-      <div style="font-size:9px;color:var(--color-text-tertiary);margin-bottom:6px">${fmtDollarWhole(value)} · ${tickers.length} position${tickers.length !== 1 ? 's' : ''}</div>
+      <div style="font-size:9px;color:var(--color-text-tertiary);margin-bottom:2px">${fmtDollarWhole(value)} · ${tickers.length} position${tickers.length !== 1 ? 's' : ''}</div>
+      <div style="margin-bottom:6px">${fmtThemeAlphaSummary(theme)}</div>
       ${rows}
     </div>`;
   }).join('');
@@ -5868,6 +5869,65 @@ function getSleeveBenchmark(sleeveName) {
 // Returns HTML for a benchmark display: ticker + price + freshness, or "no benchmark" placeholder.
 // Used by Industry Intelligence cards (Rebalance tab) and Industry Spotlight cards (Dashboard).
 // Honest: shows the anchor and freshness, never claims any alpha math.
+// Theme-alpha aggregate summary for a given theme. Returns HTML for the bottom line
+// (or empty string if not applicable). Used by both fmtBenchmarkLine (which combines it
+// with the benchmark anchor) AND Industry Reference cards (which already show the
+// benchmark anchor in the header, so they want only this aggregate line).
+//
+// Honors industryAlphaMatureOnly toggle. Closed positions excluded.
+function fmtThemeAlphaSummary(themeName) {
+  const ticker = getThemeBenchmark(themeName);
+  if (!ticker) return '';
+
+  // Filter open positions; apply maturity filter when toggle is on
+  let themePositions = positions.filter(p => !p.closed && p.ticker && p.theme === themeName);
+  if (industryAlphaMatureOnly) {
+    const now = Date.now();
+    themePositions = themePositions.filter(p => {
+      if (!p.dateBought) return false;
+      const buy = new Date(p.dateBought);
+      if (isNaN(buy)) return false;
+      const days = Math.floor((now - buy.getTime()) / 86400000);
+      return days >= MATURITY_DAYS;
+    });
+  }
+  const withAlpha = themePositions
+    .map(p => ({ pos: p, alpha: calcThemeAlpha(p) }))
+    .filter(x => x.alpha !== null);
+
+  // Detect whether maturity filter is hiding what would otherwise be visible
+  const allOpenInTheme = positions.filter(p => !p.closed && p.ticker && p.theme === themeName);
+  const filterHidingAll = industryAlphaMatureOnly && allOpenInTheme.length > 0 && themePositions.length === 0;
+
+  if (filterHidingAll) {
+    return `<div style="font-size:9px;color:var(--color-text-tertiary);margin-top:2px">vs ${ticker}: <span style="opacity:0.7">none ≥${MATURITY_DAYS}d</span></div>`;
+  }
+  if (themePositions.length === 0) return '';
+  if (withAlpha.length === 0) {
+    return `<div style="font-size:9px;color:var(--color-text-tertiary);margin-top:2px">vs ${ticker}: <span style="color:#fbbf24">backfill needed</span></div>`;
+  }
+
+  const totalDollar = withAlpha.reduce((s, x) => s + x.alpha.themeAlphaDollar, 0);
+  const beating = withAlpha.filter(x => x.alpha.themeAlphaPct > 0).length;
+  const total = withAlpha.length;
+
+  let dollarColor = 'var(--color-text-tertiary)';
+  if (totalDollar > 50) dollarColor = 'var(--color-text-success)';
+  else if (totalDollar < -50) dollarColor = 'var(--color-text-danger)';
+  const dollarStr = (totalDollar >= 0 ? '+' : '') + fmtDollarWhole(totalDollar);
+
+  let beatColor = 'var(--color-text-tertiary)';
+  if (beating === total && total > 0) beatColor = 'var(--color-text-success)';
+  else if (beating === 0) beatColor = 'var(--color-text-danger)';
+  else beatColor = '#fbbf24';
+
+  const partialNote = withAlpha.length < themePositions.length
+    ? ` <span style="color:var(--color-text-tertiary);opacity:0.6">(${withAlpha.length}/${themePositions.length})</span>`
+    : '';
+
+  return `<div style="font-size:9px;margin-top:2px"><span style="color:var(--color-text-tertiary)">vs ${ticker}:</span> <span style="color:${dollarColor};font-weight:600">${dollarStr}</span> <span style="color:var(--color-text-tertiary)">·</span> <span style="color:${beatColor}">${beating}/${total} beating</span>${partialNote}</div>`;
+}
+
 function fmtBenchmarkLine(themeName) {
   const ticker = getThemeBenchmark(themeName);
   if (!ticker) {
@@ -5892,65 +5952,7 @@ function fmtBenchmarkLine(themeName) {
     topLine = `<span style="font-size:9px;color:var(--color-text-secondary);font-weight:600">${ticker}</span> <span style="font-size:9px;color:var(--color-text-primary)">${fmtDollar(price)}</span> <span style="font-size:9px;color:${freshColor}">${freshLabel}</span>`;
   }
 
-  // ── Second line: theme alpha aggregate across positions in this theme ──
-  // Collect open positions matching this theme that have computable theme alpha.
-  // Closed positions excluded — those are about historical decisions, not current state.
-  // Filter open positions in this theme. When industryAlphaMatureOnly is on, also exclude
-  // positions held less than MATURITY_DAYS days (or with missing/invalid buy dates).
-  let themePositions = positions.filter(p => !p.closed && p.ticker && p.theme === themeName);
-  if (industryAlphaMatureOnly) {
-    const now = Date.now();
-    themePositions = themePositions.filter(p => {
-      if (!p.dateBought) return false;
-      const buy = new Date(p.dateBought);
-      if (isNaN(buy)) return false;
-      const days = Math.floor((now - buy.getTime()) / 86400000);
-      return days >= MATURITY_DAYS;
-    });
-  }
-  const withAlpha = themePositions
-    .map(p => ({ pos: p, alpha: calcThemeAlpha(p) }))
-    .filter(x => x.alpha !== null);
-
-  // Detect whether maturity filter is hiding what would otherwise be visible
-  const allOpenInTheme = positions.filter(p => !p.closed && p.ticker && p.theme === themeName);
-  const filterHidingAll = industryAlphaMatureOnly && allOpenInTheme.length > 0 && themePositions.length === 0;
-
-  let bottomLine = '';
-  if (filterHidingAll) {
-    bottomLine = `<div style="font-size:9px;color:var(--color-text-tertiary);margin-top:2px">vs ${ticker}: <span style="opacity:0.7">none ≥${MATURITY_DAYS}d</span></div>`;
-  } else if (themePositions.length === 0) {
-    // No open positions in this theme — skip the second line entirely
-    bottomLine = '';
-  } else if (withAlpha.length === 0) {
-    // Have positions but no theme alpha computable (likely backfill not yet run)
-    bottomLine = `<div style="font-size:9px;color:var(--color-text-tertiary);margin-top:2px">vs ${ticker}: <span style="color:#fbbf24">backfill needed</span></div>`;
-  } else {
-    const totalDollar = withAlpha.reduce((s, x) => s + x.alpha.themeAlphaDollar, 0);
-    const beating = withAlpha.filter(x => x.alpha.themeAlphaPct > 0).length;
-    const total = withAlpha.length;
-
-    // Color the dollar number: green if positive, red if negative, neutral if ~zero
-    let dollarColor = 'var(--color-text-tertiary)';
-    if (totalDollar > 50) dollarColor = 'var(--color-text-success)';
-    else if (totalDollar < -50) dollarColor = 'var(--color-text-danger)';
-    const dollarStr = (totalDollar >= 0 ? '+' : '') + fmtDollarWhole(totalDollar);
-
-    // Beat ratio color: green if all beat, red if none, amber if mixed
-    let beatColor = 'var(--color-text-tertiary)';
-    if (beating === total && total > 0) beatColor = 'var(--color-text-success)';
-    else if (beating === 0) beatColor = 'var(--color-text-danger)';
-    else beatColor = '#fbbf24';
-
-    // If some positions have alpha and others don't (partial backfill), note it
-    const partialNote = withAlpha.length < themePositions.length
-      ? ` <span style="color:var(--color-text-tertiary);opacity:0.6">(${withAlpha.length}/${themePositions.length})</span>`
-      : '';
-
-    bottomLine = `<div style="font-size:9px;margin-top:2px"><span style="color:var(--color-text-tertiary)">vs ${ticker}:</span> <span style="color:${dollarColor};font-weight:600">${dollarStr}</span> <span style="color:var(--color-text-tertiary)">·</span> <span style="color:${beatColor}">${beating}/${total} beating</span>${partialNote}</div>`;
-  }
-
-  return topLine + bottomLine;
+  return topLine + fmtThemeAlphaSummary(themeName);
 }
 
 function renderConcentration() {
