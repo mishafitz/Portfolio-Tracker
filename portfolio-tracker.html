@@ -1752,7 +1752,130 @@ function renderSummary(containerId, posArr, isOpen) {
       <div class="summary-card-label">Trailing S&P</div>
       <div class="summary-card-value ${s.countTrail > 0 ? 'danger' : ''}">${posArr.length > 0 ? s.countTrail : '—'}</div>
     </div>
+    ${isOpen ? renderTrackRecordCards() : ''}
   `;
+}
+
+// ─────────────────────────────────────────────
+// Track Record cards — Hit Rate, Beat Rate, Avg Win/Loss
+// Pulls from FULLY-CLOSED positions only (Interpretation 1).
+// Partial trims don't currently exist as records, so they're naturally excluded.
+// ─────────────────────────────────────────────
+function calcTrackRecord() {
+  // Only fully-closed positions with valid invested capital
+  const closed = positions.filter(p => p.closed && p.ticker);
+  const valid = closed.map(p => ({ pos: p, c: calcPos(p) }))
+    .filter(({ c }) => c.invested > 0 && c.exitValue !== undefined && c.exitValue !== null);
+
+  if (valid.length === 0) return null;
+
+  const total = valid.length;
+
+  // Hit rate (vs zero) — was it profitable?
+  const winners = valid.filter(({ c }) => c.gainLoss > 0);
+  const losers = valid.filter(({ c }) => c.gainLoss < 0);
+  // Tied = exactly $0 gain/loss → treated as neither winner nor loser
+  const profitablePct = (winners.length / total) * 100;
+
+  // Beat rate — did it outperform SPX over the holding period?
+  // c.vsSpx is in percentage points; positive = beat, negative = trailed, 0 = tied
+  const withVsSpx = valid.filter(({ c }) => c.vsSpx !== null && c.vsSpx !== undefined);
+  const beatCount = withVsSpx.filter(({ c }) => c.vsSpx > 0).length;
+  const beatPct = withVsSpx.length > 0 ? (beatCount / withVsSpx.length) * 100 : null;
+
+  // Avg win vs avg loss (dollar)
+  const avgWin = winners.length > 0
+    ? winners.reduce((s, { c }) => s + c.gainLoss, 0) / winners.length
+    : null;
+  const avgLoss = losers.length > 0
+    ? losers.reduce((s, { c }) => s + c.gainLoss, 0) / losers.length
+    : null;
+
+  return {
+    total, winners: winners.length, losers: losers.length,
+    profitablePct,
+    beatRate: { pct: beatPct, beat: beatCount, totalWithSpx: withVsSpx.length },
+    avgWin, avgLoss
+  };
+}
+
+function renderTrackRecordCards() {
+  const t = calcTrackRecord();
+  if (!t) {
+    // No closed positions yet — show placeholder cards so layout doesn't shift later
+    return `
+      <div class="summary-card" title="Percentage of fully-closed positions that finished profitable. Updates as you close positions over time.">
+        <div class="summary-card-label">Hit Rate</div>
+        <div class="summary-card-value" style="color:var(--color-text-tertiary)">—</div>
+      </div>
+      <div class="summary-card" title="Percentage of fully-closed positions that beat SPX over the holding period.">
+        <div class="summary-card-label">Beat S&P %</div>
+        <div class="summary-card-value" style="color:var(--color-text-tertiary)">—</div>
+      </div>
+      <div class="summary-card" title="Average dollar gain on winning closes vs average dollar loss on losing closes.">
+        <div class="summary-card-label">Avg Win / Loss</div>
+        <div class="summary-card-value" style="color:var(--color-text-tertiary)">—</div>
+      </div>
+    `;
+  }
+
+  // Hit rate card
+  const hitColor = t.profitablePct >= 60 ? 'success' : t.profitablePct >= 40 ? 'info' : 'danger';
+  const hitCard = `
+    <div class="summary-card" title="Percentage of fully-closed positions that finished profitable. ${t.winners} winners out of ${t.total} closed.">
+      <div class="summary-card-label">Hit Rate</div>
+      <div class="summary-card-value ${hitColor}">${t.profitablePct.toFixed(0)}%</div>
+      <div style="font-size:9px;color:var(--color-text-tertiary);margin-top:2px">${t.winners}/${t.total} profitable</div>
+    </div>
+  `;
+
+  // Beat S&P rate card
+  let beatCard;
+  if (t.beatRate.pct === null) {
+    beatCard = `
+      <div class="summary-card" title="Percentage of fully-closed positions that beat SPX. Requires SPX data on both buy and sell.">
+        <div class="summary-card-label">Beat S&P %</div>
+        <div class="summary-card-value" style="color:var(--color-text-tertiary)">—</div>
+        <div style="font-size:9px;color:var(--color-text-tertiary);margin-top:2px">no SPX data</div>
+      </div>
+    `;
+  } else {
+    const beatColor = t.beatRate.pct >= 60 ? 'success' : t.beatRate.pct >= 40 ? 'info' : 'danger';
+    beatCard = `
+      <div class="summary-card" title="Percentage of fully-closed positions that beat SPX over the holding period. ${t.beatRate.beat} beat the index out of ${t.beatRate.totalWithSpx} with SPX data.">
+        <div class="summary-card-label">Beat S&P %</div>
+        <div class="summary-card-value ${beatColor}">${t.beatRate.pct.toFixed(0)}%</div>
+        <div style="font-size:9px;color:var(--color-text-tertiary);margin-top:2px">${t.beatRate.beat}/${t.beatRate.totalWithSpx} beat index</div>
+      </div>
+    `;
+  }
+
+  // Avg win/loss card
+  let edgeCard;
+  if (t.avgWin === null && t.avgLoss === null) {
+    edgeCard = `
+      <div class="summary-card" title="Average dollar gain on winners vs average dollar loss on losers.">
+        <div class="summary-card-label">Avg Win / Loss</div>
+        <div class="summary-card-value" style="color:var(--color-text-tertiary)">—</div>
+      </div>
+    `;
+  } else {
+    const winStr = t.avgWin !== null ? fmtDollarWhole(t.avgWin) : '—';
+    const lossStr = t.avgLoss !== null ? fmtDollarWhole(t.avgLoss) : '—';
+    edgeCard = `
+      <div class="summary-card" title="Average dollar gain across ${t.winners} winning close${t.winners!==1?'s':''}, vs average dollar loss across ${t.losers} losing close${t.losers!==1?'s':''}.">
+        <div class="summary-card-label">Avg Win / Loss</div>
+        <div class="summary-card-value" style="font-size:13px">
+          <span class="success">${winStr}</span>
+          <span style="color:var(--color-text-tertiary);font-weight:400"> / </span>
+          <span class="danger">${lossStr}</span>
+        </div>
+        <div style="font-size:9px;color:var(--color-text-tertiary);margin-top:2px">${t.winners}W · ${t.losers}L</div>
+      </div>
+    `;
+  }
+
+  return hitCard + beatCard + edgeCard;
 }
 
 // ─────────────────────────────────────────────
