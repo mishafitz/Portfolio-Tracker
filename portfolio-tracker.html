@@ -852,7 +852,12 @@
     <div id="theme-stacked-bar" style="margin-bottom:20px"></div>
 
     <!-- Industry Spotlight -->
-    <div class="section-heading">Industry Spotlight <span style="font-size:9px;color:var(--color-text-tertiary);font-weight:400;text-transform:none;letter-spacing:0">— signals worth acting on · click to expand in Rebalance & Tax</span></div>
+    <div class="section-heading">Industry Spotlight <span style="font-size:9px;color:var(--color-text-tertiary);font-weight:400;text-transform:none;letter-spacing:0">— signals worth acting on · click to expand in Rebalance & Tax</span>
+      <span style="margin-left:16px;font-weight:400;text-transform:none;letter-spacing:0" title="Filter theme alpha aggregates to positions held ≥180 days. Affects both Industry Intelligence and Industry Spotlight.">
+        <span id="indalpha-toggle-all-dash" onclick="toggleIndustryAlphaMature(false)" style="font-size:9px;cursor:pointer;padding:2px 8px;border-radius:10px;color:var(--color-text-tertiary);font-weight:400">All Open</span>
+        <span id="indalpha-toggle-mature-dash" onclick="toggleIndustryAlphaMature(true)" style="font-size:9px;cursor:pointer;padding:2px 8px;border-radius:10px;color:var(--color-text-tertiary);font-weight:400">Matured (≥180d)</span>
+      </span>
+    </div>
     <div id="dashboard-theme-spotlight" style="margin-bottom:20px"></div>
 
     <!-- Strategy Reference -->
@@ -1017,6 +1022,10 @@
       <span style="margin-left:12px;font-weight:400;text-transform:none;letter-spacing:0">
         <span id="conc-toggle-sleeve" onclick="setConcMode('sleeve')" style="font-size:9px;cursor:pointer;padding:2px 8px;border-radius:10px;background:var(--color-text-info);color:#000;font-weight:600">% of Strategy</span>
         <span id="conc-toggle-total" onclick="setConcMode('total')" style="font-size:9px;cursor:pointer;padding:2px 8px;border-radius:10px;color:var(--color-text-tertiary);font-weight:400">% of Total</span>
+      </span>
+      <span style="margin-left:16px;font-weight:400;text-transform:none;letter-spacing:0" title="Filter theme alpha aggregates to positions held ≥180 days. Affects both Industry Intelligence and Industry Spotlight.">
+        <span id="indalpha-toggle-all-rebal" onclick="toggleIndustryAlphaMature(false)" style="font-size:9px;cursor:pointer;padding:2px 8px;border-radius:10px;color:var(--color-text-tertiary);font-weight:400">All Open</span>
+        <span id="indalpha-toggle-mature-rebal" onclick="toggleIndustryAlphaMature(true)" style="font-size:9px;cursor:pointer;padding:2px 8px;border-radius:10px;color:var(--color-text-tertiary);font-weight:400">Matured (≥180d)</span>
       </span>
     </div>
     <div id="theme-intel-wrap" style="margin-bottom:20px"></div>
@@ -1337,6 +1346,7 @@ let snapshots = []; // forward-only history captured by Take Snapshot
 let benchmarkPrices = {}; // { QQQ: 521.42, SMH: 499.58, ... } updated by Get Benchmarks
 let benchmarkPricesDate = null; // ISO timestamp of last benchmark fetch
 let trackRecordMatureOnly = false; // toggle: filter Track Record cards to mature positions only
+let industryAlphaMatureOnly = false; // toggle: filter Industry Intelligence/Spotlight theme alpha to mature open positions only
 
 // Tax rates for after-tax adjustments (Oregon resident, mid-six-figures household).
 // Conservative side: slightly overstates drag if your real income is lower (errs toward making
@@ -1377,7 +1387,7 @@ async function savePositions() {
     localStorage.setItem('portfolio-positions-closed', JSON.stringify({ positions: closedPos }));
     localStorage.setItem('portfolio-sp-data', JSON.stringify({ spLots, spCurrentPrice }));
     localStorage.setItem('portfolio-ledger', JSON.stringify({ cashLedger }));
-    localStorage.setItem('portfolio-snapshots-v1', JSON.stringify({ snapshots, benchmarkPrices, benchmarkPricesDate, trackRecordMatureOnly }));
+    localStorage.setItem('portfolio-snapshots-v1', JSON.stringify({ snapshots, benchmarkPrices, benchmarkPricesDate, trackRecordMatureOnly, industryAlphaMatureOnly }));
     flashSave();
   } catch(e) {
     console.warn('Save failed', e.message);
@@ -1447,6 +1457,7 @@ async function loadPositions() {
       if (snapParsed.benchmarkPrices && typeof snapParsed.benchmarkPrices === 'object') benchmarkPrices = snapParsed.benchmarkPrices;
       if (snapParsed.benchmarkPricesDate) benchmarkPricesDate = snapParsed.benchmarkPricesDate;
       if (typeof snapParsed.trackRecordMatureOnly === 'boolean') trackRecordMatureOnly = snapParsed.trackRecordMatureOnly;
+      if (typeof snapParsed.industryAlphaMatureOnly === 'boolean') industryAlphaMatureOnly = snapParsed.industryAlphaMatureOnly;
     }
   } catch(e) { /* no snapshots yet */ }
 
@@ -2034,6 +2045,44 @@ function toggleTrackRecordMature() {
   trackRecordMatureOnly = !trackRecordMatureOnly;
   scheduleSave();
   renderAll();
+}
+
+// Click handler for the All Open / Matured pills. `wantMature=true` selects "matured"; false selects "all".
+// Idempotent — clicking the active pill again does nothing visible.
+function toggleIndustryAlphaMature(wantMature) {
+  if (industryAlphaMatureOnly === wantMature) return;
+  industryAlphaMatureOnly = wantMature;
+  scheduleSave();
+  renderAll();
+}
+
+// Update the active-pill styling on both the Rebalance and Dashboard maturity toggles.
+// Called by renderAll so visual state stays in sync regardless of which surface was clicked.
+function updateIndustryAlphaToggleVisual() {
+  const ids = [
+    ['indalpha-toggle-all-rebal',    'indalpha-toggle-mature-rebal'],
+    ['indalpha-toggle-all-dash',     'indalpha-toggle-mature-dash']
+  ];
+  ids.forEach(([allId, matureId]) => {
+    const allEl = document.getElementById(allId);
+    const matureEl = document.getElementById(matureId);
+    if (!allEl || !matureEl) return;
+    if (industryAlphaMatureOnly) {
+      allEl.style.background = '';
+      allEl.style.color = 'var(--color-text-tertiary)';
+      allEl.style.fontWeight = '400';
+      matureEl.style.background = 'var(--color-text-info)';
+      matureEl.style.color = '#000';
+      matureEl.style.fontWeight = '600';
+    } else {
+      allEl.style.background = 'var(--color-text-info)';
+      allEl.style.color = '#000';
+      allEl.style.fontWeight = '600';
+      matureEl.style.background = '';
+      matureEl.style.color = 'var(--color-text-tertiary)';
+      matureEl.style.fontWeight = '400';
+    }
+  });
 }
 
 // ─────────────────────────────────────────────
@@ -5527,20 +5576,83 @@ function fmtBenchmarkLine(themeName) {
     return '<span style="font-size:9px;color:var(--color-text-tertiary);font-style:italic">no benchmark assigned</span>';
   }
   const price = benchmarkPrices[ticker];
+
+  // ── Top line: benchmark anchor (ticker + price + freshness) ──
+  let topLine;
   if (!price) {
-    return `<span style="font-size:9px;color:var(--color-text-tertiary)">${ticker} — </span><span style="font-size:9px;color:#fbbf24">not fetched yet</span>`;
+    topLine = `<span style="font-size:9px;color:var(--color-text-tertiary)">${ticker} — </span><span style="font-size:9px;color:#fbbf24">not fetched yet</span>`;
+  } else {
+    let freshColor = 'var(--color-text-tertiary)';
+    let freshLabel = '';
+    if (benchmarkPricesDate) {
+      const hours = Math.floor((Date.now() - new Date(benchmarkPricesDate).getTime()) / 3600000);
+      if (hours < 1) freshLabel = '<1h';
+      else if (hours < 24) freshLabel = hours + 'h';
+      else if (hours < 72) { freshLabel = Math.floor(hours/24) + 'd'; freshColor = '#fbbf24'; }
+      else { freshLabel = Math.floor(hours/24) + 'd'; freshColor = 'var(--color-text-danger)'; }
+    }
+    topLine = `<span style="font-size:9px;color:var(--color-text-secondary);font-weight:600">${ticker}</span> <span style="font-size:9px;color:var(--color-text-primary)">${fmtDollar(price)}</span> <span style="font-size:9px;color:${freshColor}">${freshLabel}</span>`;
   }
-  // Freshness color: green <24h, amber 24-72h, red >72h
-  let freshColor = 'var(--color-text-tertiary)';
-  let freshLabel = '';
-  if (benchmarkPricesDate) {
-    const hours = Math.floor((Date.now() - new Date(benchmarkPricesDate).getTime()) / 3600000);
-    if (hours < 1) freshLabel = '<1h';
-    else if (hours < 24) freshLabel = hours + 'h';
-    else if (hours < 72) { freshLabel = Math.floor(hours/24) + 'd'; freshColor = '#fbbf24'; }
-    else { freshLabel = Math.floor(hours/24) + 'd'; freshColor = 'var(--color-text-danger)'; }
+
+  // ── Second line: theme alpha aggregate across positions in this theme ──
+  // Collect open positions matching this theme that have computable theme alpha.
+  // Closed positions excluded — those are about historical decisions, not current state.
+  // Filter open positions in this theme. When industryAlphaMatureOnly is on, also exclude
+  // positions held less than MATURITY_DAYS days (or with missing/invalid buy dates).
+  let themePositions = positions.filter(p => !p.closed && p.ticker && p.theme === themeName);
+  if (industryAlphaMatureOnly) {
+    const now = Date.now();
+    themePositions = themePositions.filter(p => {
+      if (!p.dateBought) return false;
+      const buy = new Date(p.dateBought);
+      if (isNaN(buy)) return false;
+      const days = Math.floor((now - buy.getTime()) / 86400000);
+      return days >= MATURITY_DAYS;
+    });
   }
-  return `<span style="font-size:9px;color:var(--color-text-secondary);font-weight:600">${ticker}</span> <span style="font-size:9px;color:var(--color-text-primary)">${fmtDollar(price)}</span> <span style="font-size:9px;color:${freshColor}">${freshLabel}</span>`;
+  const withAlpha = themePositions
+    .map(p => ({ pos: p, alpha: calcThemeAlpha(p) }))
+    .filter(x => x.alpha !== null);
+
+  // Detect whether maturity filter is hiding what would otherwise be visible
+  const allOpenInTheme = positions.filter(p => !p.closed && p.ticker && p.theme === themeName);
+  const filterHidingAll = industryAlphaMatureOnly && allOpenInTheme.length > 0 && themePositions.length === 0;
+
+  let bottomLine = '';
+  if (filterHidingAll) {
+    bottomLine = `<div style="font-size:9px;color:var(--color-text-tertiary);margin-top:2px">vs ${ticker}: <span style="opacity:0.7">none ≥${MATURITY_DAYS}d</span></div>`;
+  } else if (themePositions.length === 0) {
+    // No open positions in this theme — skip the second line entirely
+    bottomLine = '';
+  } else if (withAlpha.length === 0) {
+    // Have positions but no theme alpha computable (likely backfill not yet run)
+    bottomLine = `<div style="font-size:9px;color:var(--color-text-tertiary);margin-top:2px">vs ${ticker}: <span style="color:#fbbf24">backfill needed</span></div>`;
+  } else {
+    const totalDollar = withAlpha.reduce((s, x) => s + x.alpha.themeAlphaDollar, 0);
+    const beating = withAlpha.filter(x => x.alpha.themeAlphaPct > 0).length;
+    const total = withAlpha.length;
+
+    // Color the dollar number: green if positive, red if negative, neutral if ~zero
+    let dollarColor = 'var(--color-text-tertiary)';
+    if (totalDollar > 50) dollarColor = 'var(--color-text-success)';
+    else if (totalDollar < -50) dollarColor = 'var(--color-text-danger)';
+    const dollarStr = (totalDollar >= 0 ? '+' : '') + fmtDollarWhole(totalDollar);
+
+    // Beat ratio color: green if all beat, red if none, amber if mixed
+    let beatColor = 'var(--color-text-tertiary)';
+    if (beating === total && total > 0) beatColor = 'var(--color-text-success)';
+    else if (beating === 0) beatColor = 'var(--color-text-danger)';
+    else beatColor = '#fbbf24';
+
+    // If some positions have alpha and others don't (partial backfill), note it
+    const partialNote = withAlpha.length < themePositions.length
+      ? ` <span style="color:var(--color-text-tertiary);opacity:0.6">(${withAlpha.length}/${themePositions.length})</span>`
+      : '';
+
+    bottomLine = `<div style="font-size:9px;margin-top:2px"><span style="color:var(--color-text-tertiary)">vs ${ticker}:</span> <span style="color:${dollarColor};font-weight:600">${dollarStr}</span> <span style="color:var(--color-text-tertiary)">·</span> <span style="color:${beatColor}">${beating}/${total} beating</span>${partialNote}</div>`;
+  }
+
+  return topLine + bottomLine;
 }
 
 function renderConcentration() {
@@ -5836,6 +5948,7 @@ function renderAll() {
   renderTaxExposure();
   renderStaleBanner();
   updateBackfillButton();
+  updateIndustryAlphaToggleVisual();
   syncFixedScrollbar();
 }
 
