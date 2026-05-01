@@ -860,13 +860,13 @@
     </div>
     <div id="dashboard-theme-spotlight" style="margin-bottom:20px"></div>
 
-    <!-- Industry Reference -->
-    <div class="section-heading">Industry Reference</div>
-    <div id="industry-ref-panel" style="margin:8px 0 12px"></div>
-
     <!-- Strategy Reference -->
     <div class="section-heading">Strategy Reference</div>
     <div id="sleeve-ref-panel" style="margin:8px 0 12px" onclick="showCardOverlay('stratref')" style="cursor:pointer"></div>
+
+    <!-- Industry Reference -->
+    <div class="section-heading">Industry Reference</div>
+    <div id="industry-ref-panel" style="margin:8px 0 12px"></div>
 
     <!-- Trade Simulator Ribbon -->
     <div style="margin:10px 0 12px">
@@ -960,6 +960,7 @@
             <th class="r">Your Ret %</th>
             <th class="r">S&P Ret %</th>
             <th class="r">vs S&P (pp)</th>
+            <th class="r" title="Theme-relative alpha — your return minus theme benchmark return over the same holding period. Honest comparison for sleeves with theme benchmarks (Thesis Plays, Quality with mapped industries).">Theme α (pp)</th>
             <th>Result</th>
             <th>Status</th>
             <th>Industry</th>
@@ -1001,6 +1002,7 @@
             <th class="r">Your Ret %</th>
             <th class="r">S&P Ret %</th>
             <th class="r">vs S&P (pp)</th>
+            <th class="r" title="Theme-relative alpha — your return minus theme benchmark return over the holding period (buy date to sell date).">Theme α (pp)</th>
             <th>Result</th>
             <th>Status</th>
             <th>Industry</th>
@@ -1054,6 +1056,7 @@
             <th onclick="sortRebal('portfolioPct')" class="sortable r">Managed % <span id="sort-portfolioPct"></span></th>
             <th class="r">Industry %</th>
             <th onclick="sortRebal('dollarAlpha')" class="sortable r">Dollar Alpha <span id="sort-dollarAlpha"></span></th>
+            <th onclick="sortRebal('themeAlpha')" class="sortable r" title="Theme-relative alpha — your dollar gain vs theme benchmark over the same period. More honest comparison for sleeves with assigned theme benchmarks.">Theme α <span id="sort-themeAlpha"></span></th>
             <th onclick="sortRebal('gl')" class="sortable r">Unreal. G/L <span id="sort-gl"></span></th>
             <th>Signal</th>
           </tr>
@@ -1918,6 +1921,16 @@ function calcTrackRecord() {
     ? losersATX.reduce((s, v) => s + v.gainATX, 0) / losersATX.length
     : null;
 
+  // ── Theme-relative metrics (only positions with computable theme alpha) ──
+  // calcThemeAlpha needs benchmarkPriceAtBuy, benchmarkPriceAtSell, and a mapped theme.
+  // Closed positions with unmapped themes or missing backfill data are excluded from
+  // this metric (sample shrinks accordingly — Wilson CI + verdict logic handles it).
+  const withThemeAlpha = valid.map(v => ({ ...v, themeAlpha: calcThemeAlpha(v.pos) }))
+                              .filter(v => v.themeAlpha !== null);
+  const beatThemeCount = withThemeAlpha.filter(v => v.themeAlpha.themeAlphaPct > 0).length;
+  const beatThemePct = withThemeAlpha.length > 0
+    ? (beatThemeCount / withThemeAlpha.length) * 100 : null;
+
   return {
     empty: false,
     matureFiltered: trackRecordMatureOnly,
@@ -1934,7 +1947,10 @@ function calcTrackRecord() {
     profitableVerdictATX: rateVerdict(winnersATX.length, total),
     beatRateATX: { pct: beatPctATX, beat: beatCountATX, totalWithSpx: withVsSpxATX.length,
                    verdict: rateVerdict(beatCountATX, withVsSpxATX.length) },
-    avgWinATX, avgLossATX
+    avgWinATX, avgLossATX,
+    // Theme-relative
+    beatTheme: { pct: beatThemePct, beat: beatThemeCount, totalWithTheme: withThemeAlpha.length,
+                 verdict: rateVerdict(beatThemeCount, withThemeAlpha.length) }
   };
 }
 
@@ -1962,6 +1978,10 @@ function renderTrackRecordCards() {
       </div>
       <div class="summary-card" title="Percentage of fully-closed positions that beat SPX over the holding period.">
         <div class="summary-card-label">Beat S&P %</div>
+        <div class="summary-card-value" style="color:var(--color-text-tertiary)">${emptyMsg}</div>
+      </div>
+      <div class="summary-card" title="Percentage of closed positions that beat their theme benchmark.">
+        <div class="summary-card-label">Beat Theme %</div>
         <div class="summary-card-value" style="color:var(--color-text-tertiary)">${emptyMsg}</div>
       </div>
       <div class="summary-card" title="Average dollar gain on winning closes vs average dollar loss on losing closes.">
@@ -2042,7 +2062,34 @@ function renderTrackRecordCards() {
     `;
   }
 
-  return hitCard + beatCard + edgeCard;
+  // Beat Theme % card — fully-closed positions that beat their assigned theme benchmark.
+  // Sample is naturally smaller (only positions with mapped themes AND backfilled buy+sell prices).
+  // Wilson 80% CI verdict applies same as Beat S&P %.
+  let beatThemeCard;
+  if (!t.beatTheme || t.beatTheme.pct === null) {
+    beatThemeCard = `
+      <div class="summary-card" title="Percentage of closed positions that beat their theme benchmark over the holding period. Requires mapped themes and backfilled benchmark prices on buy and sell dates.">
+        <div class="summary-card-label">Beat Theme %</div>
+        <div class="summary-card-value" style="color:var(--color-text-tertiary)">—</div>
+        <div style="font-size:9px;color:var(--color-text-tertiary);margin-top:2px">no theme data yet</div>
+      </div>
+    `;
+  } else {
+    const beatThemeMuted = t.beatTheme.verdict.includes50;
+    const beatThemeColor = beatThemeMuted ? '' :
+      t.beatTheme.pct >= 60 ? 'success' : t.beatTheme.pct >= 40 ? 'info' : 'danger';
+    const beatThemeStyle = beatThemeMuted ? 'color:var(--color-text-secondary)' : '';
+    beatThemeCard = `
+      <div class="summary-card" title="Percentage of closed positions that beat their theme benchmark (e.g., NVDA vs SMH, AAPL vs QQQ) over the holding period. ${t.beatTheme.beat}/${t.beatTheme.totalWithTheme} beat theme. ${t.beatTheme.verdict.text}. More honest comparison than vs S&P for sleeves with theme benchmarks.">
+        <div class="summary-card-label">Beat Theme %</div>
+        <div class="summary-card-value ${beatThemeColor}" style="${beatThemeStyle}">${t.beatTheme.pct.toFixed(0)}%</div>
+        <div style="font-size:9px;color:var(--color-text-tertiary);margin-top:2px">${t.beatTheme.beat}/${t.beatTheme.totalWithTheme} beat theme</div>
+        <div style="font-size:9px;color:${beatThemeMuted?'#fbbf24':'var(--color-text-tertiary)'};margin-top:2px">${t.beatTheme.verdict.text}</div>
+      </div>
+    `;
+  }
+
+  return hitCard + beatCard + beatThemeCard + edgeCard;
 }
 
 function toggleTrackRecordMature() {
@@ -2120,6 +2167,12 @@ function renderClosedRow(pos) {
     <td class="calc-cell ${retClass}">${c.yourReturn !== null && c.invested > 0 && c.exitValue > 0 ? fmtPct(c.yourReturn) : '<span class="dash">—</span>'}</td>
     <td class="calc-cell ${spxRetClass}">${c.spxReturn !== null ? fmtPct(c.spxReturn) : '<span class="dash">—</span>'}</td>
     <td class="calc-cell ${vsClass}">${c.vsSpx !== null ? fmtPp(c.vsSpx) : '<span class="dash">—</span>'}</td>
+    <td class="calc-cell">${(() => {
+      const ta = calcThemeAlpha(pos);
+      if (!ta) return '<span class="dash">—</span>';
+      const cls = colorClass(ta.themeAlphaPct);
+      return `<span class="${cls}" title="vs ${ta.benchTicker}: ${fmtPp(ta.themeAlphaPct)} (${ta.themeAlphaDollar >= 0 ? '+' : ''}${fmtDollarWhole(ta.themeAlphaDollar)})">${fmtPp(ta.themeAlphaPct)}</span>`;
+    })()}</td>
     <td>${resultHtml}</td>
     <td><span class="sold-badge" onclick="toggleClosed(${pos.id})" title="Click to reopen">Sold</span></td>
     <td class="calc-cell" style="text-align:left">${esc(pos.theme||'') || '<span class="dash">—</span>'}</td>
@@ -2187,6 +2240,12 @@ function renderRow(pos) {
     <td class="calc-cell ${retClass}">${c.yourReturn !== null && c.invested > 0 && c.exitValue > 0 ? fmtPct(c.yourReturn) : '<span class="dash">—</span>'}</td>
     <td class="calc-cell ${spxRetClass}">${c.spxReturn !== null ? fmtPct(c.spxReturn) : '<span class="dash">—</span>'}</td>
     <td class="calc-cell ${vsClass}">${c.vsSpx !== null ? fmtPp(c.vsSpx) : '<span class="dash">—</span>'}</td>
+    <td class="calc-cell">${(() => {
+      const ta = calcThemeAlpha(pos);
+      if (!ta) return '<span class="dash">—</span>';
+      const cls = colorClass(ta.themeAlphaPct);
+      return `<span class="${cls}" title="vs ${ta.benchTicker}: ${fmtPp(ta.themeAlphaPct)} (${ta.themeAlphaDollar >= 0 ? '+' : ''}${fmtDollarWhole(ta.themeAlphaDollar)})">${fmtPp(ta.themeAlphaPct)}</span>`;
+    })()}</td>
     <td class="result-cell">${resultHtml}</td>
     <td>${statusHtml}</td>
     <td>
@@ -4895,7 +4954,7 @@ function renderIndustryRef() {
       </div>`;
     }).join('');
 
-    return `<div style="background:var(--color-background-secondary);border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:10px 12px">
+    return `<div style="background:var(--color-background-secondary);border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:10px 12px;display:flex;flex-direction:column;cursor:pointer;transition:border-color 0.15s" onclick="showCardOverlay('industry:${esc(theme).replace(/'/g, "\\'")}')" onmouseover="this.style.borderColor='var(--color-text-info)'" onmouseout="this.style.borderColor='var(--color-border-tertiary)'">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
         <span style="font-size:9px;font-weight:700;color:var(--color-text-primary);text-transform:uppercase;letter-spacing:0.08em">${esc(theme)}</span>
         ${headerRight}
@@ -4905,7 +4964,7 @@ function renderIndustryRef() {
     </div>`;
   }).join('');
 
-  panel.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px">${cards}</div>`;
+  panel.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;align-items:stretch">${cards}</div>`;
 }
 
   const action = document.getElementById('sim-action').value;
@@ -5213,6 +5272,112 @@ function _renderCardOverlay(type) {
       });
       html += '</div>';
     });
+  } else if (type.startsWith('industry:')) {
+    const themeName = type.substring('industry:'.length);
+    const themePositions = open.filter(p => p.theme === themeName);
+    const themeTotal = themePositions.reduce((s, p) => s + (calcPos(p).exitValue || 0), 0);
+    const benchTicker = getThemeBenchmark(themeName);
+
+    // ── Header: industry name + benchmark anchor + theme alpha aggregate ──
+    let header = '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">';
+    header += '<div style="font-size:14px;font-weight:700;color:var(--color-text-primary)">' + esc(themeName) + '</div>';
+    header += '<div style="font-size:11px;color:var(--color-text-tertiary);font-weight:400">' + (benchTicker ? 'vs ' + benchTicker : 'no benchmark') + '</div>';
+    header += '</div>';
+    header += '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:6px">' + fmtDollarWhole(themeTotal) + ' · ' + themePositions.length + ' position' + (themePositions.length !== 1 ? 's' : '') + '</div>';
+
+    // Theme-alpha aggregate (same logic as fmtBenchmarkLine bottom line)
+    if (benchTicker) {
+      const withAlpha = themePositions.map(p => ({ pos: p, alpha: calcThemeAlpha(p) })).filter(x => x.alpha !== null);
+      if (withAlpha.length > 0) {
+        const totalDollar = withAlpha.reduce((s, x) => s + x.alpha.themeAlphaDollar, 0);
+        const beating = withAlpha.filter(x => x.alpha.themeAlphaPct > 0).length;
+        const dollarColor = totalDollar > 50 ? 'var(--color-text-success)'
+                          : totalDollar < -50 ? 'var(--color-text-danger)'
+                          : 'var(--color-text-tertiary)';
+        const beatColor = beating === withAlpha.length ? 'var(--color-text-success)'
+                        : beating === 0 ? 'var(--color-text-danger)'
+                        : '#fbbf24';
+        const dollarStr = (totalDollar >= 0 ? '+' : '') + fmtDollarWhole(totalDollar);
+        const partialNote = withAlpha.length < themePositions.length
+          ? ' <span style="color:var(--color-text-tertiary);opacity:0.6">(' + withAlpha.length + '/' + themePositions.length + ')</span>'
+          : '';
+        header += '<div style="font-size:11px;margin-bottom:14px;padding:6px 10px;background:var(--color-background-tertiary);border-radius:var(--border-radius-sm);display:inline-block">';
+        header += '<span style="color:var(--color-text-tertiary)">vs ' + benchTicker + ':</span> ';
+        header += '<span style="color:' + dollarColor + ';font-weight:700">' + dollarStr + '</span> ';
+        header += '<span style="color:var(--color-text-tertiary)">·</span> ';
+        header += '<span style="color:' + beatColor + ';font-weight:600">' + beating + '/' + withAlpha.length + ' beating</span>' + partialNote;
+        header += '</div>';
+      } else if (themePositions.length > 0) {
+        header += '<div style="font-size:11px;margin-bottom:14px;color:#fbbf24">vs ' + benchTicker + ': backfill needed</div>';
+      }
+    }
+
+    // ── Per-position detail rows ──
+    // Consolidate by ticker first (combine multi-lot tickers within an industry)
+    const consolidated = {};
+    themePositions.forEach(p => {
+      if (!consolidated[p.ticker]) {
+        consolidated[p.ticker] = {
+          ticker: p.ticker, sleeve: p.sleeve || '', isETF: p.isETF,
+          dateBought: p.dateBought, account: p.account || '',
+          totalValue: 0, totalGl: 0, lots: []
+        };
+      }
+      const c = calcPos(p);
+      consolidated[p.ticker].totalValue += c.exitValue || 0;
+      consolidated[p.ticker].totalGl += c.gainLoss || 0;
+      consolidated[p.ticker].lots.push(p);
+    });
+    const tickers = Object.values(consolidated).sort((a, b) => b.totalValue - a.totalValue);
+
+    let body = '';
+    tickers.forEach(t => {
+      const pctTheme = themeTotal > 0 ? (t.totalValue / themeTotal) * 100 : 0;
+      const pctActive = totalManaged > 0 ? (t.totalValue / totalManaged) * 100 : 0;
+      const sleeveColor = SLEEVE_COLORS[t.sleeve] || 'var(--color-text-tertiary)';
+      const etfBadge = t.isETF ? '<span style="font-size:9px;background:#3a3a5a;color:#a0a0c0;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:5px">ETF</span>' : '';
+      const sleeveBadge = t.sleeve ? '<span style="font-size:9px;color:' + sleeveColor + ';background:' + sleeveColor + '22;padding:2px 6px;border-radius:3px;font-weight:700;margin-left:5px">' + esc(t.sleeve) + '</span>' : '';
+      const lotsNote = t.lots.length > 1 ? '<span style="font-size:9px;color:var(--color-text-tertiary);margin-left:5px">' + t.lots.length + ' lots</span>' : '';
+      const glColor = t.totalGl >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
+
+      // Theme alpha across lots within this ticker
+      const lotAlphas = t.lots.map(p => calcThemeAlpha(p));
+      const allHaveAlpha = lotAlphas.every(ta => ta !== null);
+      let themeAlphaCell = '<span style="color:var(--color-text-tertiary);font-style:italic;font-size:10px">no theme data</span>';
+      if (allHaveAlpha && lotAlphas.length > 0) {
+        const totalThemeDollar = lotAlphas.reduce((s, ta) => s + ta.themeAlphaDollar, 0);
+        const tColor = totalThemeDollar > 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
+        const dollarStr = (totalThemeDollar >= 0 ? '+' : '') + fmtDollarWhole(totalThemeDollar);
+        themeAlphaCell = '<span style="color:' + tColor + ';font-weight:600">' + dollarStr + '</span>';
+      }
+
+      body += '<div style="padding:10px 12px;border-bottom:1px solid var(--color-border-tertiary);display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;align-items:start">';
+      // Left column: ticker + tags + percentages
+      body += '<div>';
+      body += '<div style="display:flex;align-items:center;gap:0;flex-wrap:wrap;margin-bottom:3px">';
+      body += '<span style="font-size:13px;font-weight:700;color:var(--color-text-primary)">' + esc(t.ticker) + '</span>';
+      body += sleeveBadge + etfBadge + lotsNote;
+      body += '</div>';
+      body += '<div style="font-size:10px;color:var(--color-text-tertiary)">Strategy <span style="color:var(--color-text-secondary);font-weight:600">' + pctTheme.toFixed(1) + '%</span> · Managed <span style="color:var(--color-text-secondary);font-weight:600">' + pctActive.toFixed(1) + '%</span></div>';
+      body += '</div>';
+      // Middle column: dollar value + G/L
+      body += '<div style="text-align:right">';
+      body += '<div style="font-size:12px;font-weight:600;color:var(--color-text-primary)">' + fmtDollarWhole(t.totalValue) + '</div>';
+      body += '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:2px">G/L <span style="color:' + glColor + ';font-weight:600">' + (t.totalGl >= 0 ? '+' : '') + fmtDollarWhole(t.totalGl) + '</span></div>';
+      body += '</div>';
+      // Right column: theme alpha
+      body += '<div style="text-align:right">';
+      body += '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">vs ' + (benchTicker || '—') + '</div>';
+      body += '<div style="font-size:12px">' + themeAlphaCell + '</div>';
+      body += '</div>';
+      body += '</div>';
+    });
+
+    if (tickers.length === 0) {
+      body = '<div style="padding:20px;color:var(--color-text-tertiary);font-style:italic;text-align:center">No positions in this industry.</div>';
+    }
+
+    html = header + body;
   }
 
   content.innerHTML = html;
@@ -5858,6 +6023,16 @@ function renderRebalance() {
     const totalGl = tranches.reduce((s, d) => s + (d.gl || 0), 0);
     const totalAlpha = tranches.every(d => d.dollarAlpha !== null)
       ? tranches.reduce((s, d) => s + d.dollarAlpha, 0) : null;
+
+    // Theme alpha across tranches: sum of per-tranche themeAlphaDollar where computable.
+    // If ANY tranche is missing theme alpha (no benchmark, no backfilled price, etc.),
+    // the aggregate is null — we don't want to silently underrepresent the position.
+    let totalThemeAlpha = null;
+    const themeAlphas = tranches.map(d => calcThemeAlpha(d.p));
+    if (themeAlphas.length > 0 && themeAlphas.every(ta => ta !== null)) {
+      totalThemeAlpha = themeAlphas.reduce((s, ta) => s + ta.themeAlphaDollar, 0);
+    }
+
     const totalEstTax = isIRA ? null
       : tranches.reduce((s, d) => s + (d.estTax || 0), 0);
 
@@ -5904,7 +6079,7 @@ function renderRebalance() {
 
     return { ticker: g.ticker, account: g.account, count, isIRA,
       holdingLabel, allLT, allST, daysHeldMin,
-      vsSpx, totalAlpha, totalGl, totalEstTax, totalInvested, totalExit, portfolioPct,
+      vsSpx, totalAlpha, totalThemeAlpha, totalGl, totalEstTax, totalInvested, totalExit, portfolioPct,
       industryPct, strategyPct, industryName, strategyName,
       signal, signalClass };
   });
@@ -5916,6 +6091,7 @@ function renderRebalance() {
     if (rebalSortCol === 'daysHeld') { av = a.daysHeldMin ?? 0; bv = b.daysHeldMin ?? 0; }
     else if (rebalSortCol === 'portfolioPct') { av = a.portfolioPct ?? 0; bv = b.portfolioPct ?? 0; }
     else if (rebalSortCol === 'dollarAlpha') { av = a.totalAlpha ?? -9999; bv = b.totalAlpha ?? -9999; }
+    else if (rebalSortCol === 'themeAlpha') { av = a.totalThemeAlpha ?? -9999; bv = b.totalThemeAlpha ?? -9999; }
     else if (rebalSortCol === 'gl') { av = a.totalGl ?? -9999; bv = b.totalGl ?? -9999; }
     else if (rebalSortCol === 'estTax') { av = a.totalEstTax ?? 0; bv = b.totalEstTax ?? 0; }
     else { av = a.totalAlpha ?? -9999; bv = b.totalAlpha ?? -9999; }
@@ -5923,7 +6099,7 @@ function renderRebalance() {
   });
 
   // Update sort indicators
-  ['ticker','daysHeld','portfolioPct','dollarAlpha','gl'].forEach(col => {
+  ['ticker','daysHeld','portfolioPct','dollarAlpha','themeAlpha','gl'].forEach(col => {
     const el = document.getElementById('sort-' + col);
     if (el) el.textContent = rebalSortCol === col ? (rebalSortDir === 1 ? ' ↑' : ' ↓') : '';
     const th = el?.closest('th');
@@ -5931,7 +6107,7 @@ function renderRebalance() {
   });
 
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="no-rows">No open positions to analyse.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="no-rows">No open positions to analyse.</td></tr>`;
     return;
   }
 
@@ -5995,6 +6171,13 @@ function renderRebalance() {
       <td class="r" style="font-weight:600;color:var(--color-text-secondary)">${r.portfolioPct !== null ? r.portfolioPct.toFixed(1) + '%' : '—'}</td>
       <td class="r" style="font-size:10px;color:var(--color-text-tertiary)">${r.industryPct !== null ? r.industryPct.toFixed(1) + '%' : '—'}</td>
       <td class="r" style="font-weight:700;font-size:13px;background:${alphaBg};color:${alphaColor}">${r.totalAlpha !== null ? fmtDollar(r.totalAlpha) : '—'}</td>
+      <td class="r" style="font-weight:600;font-size:12px;background:${(() => {
+          if (r.totalThemeAlpha === null) return 'transparent';
+          return r.totalThemeAlpha > 0 ? 'rgba(74,222,128,0.10)' : 'rgba(248,113,113,0.10)';
+        })()};color:${(() => {
+          if (r.totalThemeAlpha === null) return 'var(--color-text-tertiary)';
+          return r.totalThemeAlpha > 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
+        })()}">${r.totalThemeAlpha !== null ? fmtDollar(r.totalThemeAlpha) : '<span style="font-size:9px;font-style:italic">no bench</span>'}</td>
       <td class="r" style="font-weight:600;background:${glBg};color:${glColor}">${fmtDollar(r.totalGl)}</td>
       <td><span class="signal-badge ${r.signalClass}">${r.signal}</span></td>
     </tr>`;
