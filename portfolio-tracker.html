@@ -758,14 +758,17 @@
         <span id="indalpha-toggle-mature-dash" onclick="toggleIndustryAlphaMature(true)" style="font-size:9px;cursor:pointer;padding:2px 8px;border-radius:10px;color:var(--color-text-tertiary);font-weight:400">Matured (≥180d)</span>
       </span>
     </div>
+    <div style="font-size:9px;color:var(--color-text-tertiary);font-style:italic;margin:2px 0 4px;padding:0 2px">Theme α numbers are capital-weighted at the industry level. Click any card for drill-down with per-position pp.</div>
     <div id="dashboard-theme-spotlight" style="margin-bottom:20px"></div>
 
     <!-- Strategy Reference -->
     <div class="section-heading">Strategy Reference</div>
+    <div style="font-size:9px;color:var(--color-text-tertiary);font-style:italic;margin:2px 0 4px;padding:0 2px">Theme α inline shows position-specific pp (this ticker's return minus theme benchmark over the holding period). For industry-aggregate capital-weighted pp, see Industry Reference.</div>
     <div id="sleeve-ref-panel" style="margin:8px 0 12px" onclick="showCardOverlay('stratref')" style="cursor:pointer"></div>
 
     <!-- Industry Reference -->
     <div class="section-heading">Industry Reference</div>
+    <div style="font-size:9px;color:var(--color-text-tertiary);font-style:italic;margin:2px 0 4px;padding:0 2px">Industry header pp is capital-weighted (total dollar deficit ÷ invested capital). Per-position pp shown in drill-down is position-specific. They differ for unbalanced industries — both are honest, just different questions.</div>
     <div id="industry-ref-panel" style="margin:8px 0 12px"></div>
 
     <!-- Trade Simulator Ribbon -->
@@ -2985,9 +2988,55 @@ function calcThemeAlpha(pos) {
   return {
     yourReturn,
     benchReturn,
-    themeAlphaPct,        // percentage points
+    themeAlphaPct,        // percentage points (position-specific)
     themeAlphaDollar,     // dollar value
+    invested,             // capital basis (for dollar-weighted aggregation)
     benchTicker: themeBench
+  };
+}
+
+// Aggregate theme alpha across a set of positions using dollar-weighted percentage points.
+// This is the more honest aggregate framing: pp deviation on actual capital deployed.
+//
+// Returns an object with:
+//   - totalDollar: sum of per-position theme alpha dollars
+//   - totalInvested: sum of invested capital
+//   - weightedPp: dollar-weighted percentage points (totalDollar / totalInvested × 100)
+//   - worstPositionPp: the most-trailing per-position pp (negative number) — for UNUSUAL detection
+//   - bestPositionPp: the most-beating per-position pp (positive number)
+//   - worstPosition: the position record producing worstPositionPp (for description text)
+//   - count: number of positions with computable theme alpha
+//   - benchTicker: the theme benchmark ticker (or null)
+//
+// Returns null if no positions have computable theme alpha (no benchmark mapped, no backfill, etc.).
+function aggregateThemeAlpha(positionsArr) {
+  if (!positionsArr || positionsArr.length === 0) return null;
+  const computed = positionsArr
+    .map(p => ({ pos: p, alpha: calcThemeAlpha(p) }))
+    .filter(x => x.alpha !== null);
+  if (computed.length === 0) return null;
+
+  const totalDollar = computed.reduce((s, x) => s + x.alpha.themeAlphaDollar, 0);
+  const totalInvested = computed.reduce((s, x) => s + x.alpha.invested, 0);
+  const weightedPp = totalInvested > 0 ? (totalDollar / totalInvested) * 100 : 0;
+
+  // Find worst (most negative) and best (most positive) per-position pp
+  let worst = computed[0], best = computed[0];
+  computed.forEach(x => {
+    if (x.alpha.themeAlphaPct < worst.alpha.themeAlphaPct) worst = x;
+    if (x.alpha.themeAlphaPct > best.alpha.themeAlphaPct) best = x;
+  });
+
+  return {
+    totalDollar,
+    totalInvested,
+    weightedPp,
+    worstPositionPp: worst.alpha.themeAlphaPct,
+    worstPosition: worst.pos,
+    bestPositionPp: best.alpha.themeAlphaPct,
+    bestPosition: best.pos,
+    count: computed.length,
+    benchTicker: computed[0].alpha.benchTicker
   };
 }
 
@@ -4869,16 +4918,21 @@ function renderSleeveRef() {
 
         // Per-row theme alpha — aggregate across all open lots of this ticker in this sleeve.
         // (A single ticker can appear in multiple lots with the same theme.)
+        // Per-position pp: weighted within this ticker by invested capital.
         const tickerLots = open.filter(p => p.ticker === t.ticker && p.sleeve === sleeve);
         const lotAlphas = tickerLots.map(p => calcThemeAlpha(p));
         const allHaveAlpha = lotAlphas.length > 0 && lotAlphas.every(ta => ta !== null);
         let themeAlphaInline = '';
         if (allHaveAlpha) {
           const totalThemeDollar = lotAlphas.reduce((s, ta) => s + ta.themeAlphaDollar, 0);
+          const totalInvested = lotAlphas.reduce((s, ta) => s + ta.invested, 0);
+          const positionPp = totalInvested > 0 ? (totalThemeDollar / totalInvested) * 100 : 0;
           const benchTicker = lotAlphas[0].benchTicker;
           const taColor = totalThemeDollar > 0 ? 'var(--color-text-success)' : totalThemeDollar < 0 ? 'var(--color-text-danger)' : 'var(--color-text-tertiary)';
           const dollarStr = (totalThemeDollar >= 0 ? '+' : '') + fmtDollarWhole(totalThemeDollar);
-          themeAlphaInline = `<span style="font-size:9px;color:var(--color-text-tertiary);margin-left:8px">vs ${benchTicker} <span style="color:${taColor};font-weight:600">${dollarStr}</span></span>`;
+          const ppStr = (positionPp >= 0 ? '+' : '') + positionPp.toFixed(0) + 'pp';
+          const ppTooltip = 'Position-specific percentage points: this ticker\'s return minus the theme benchmark return over the holding period. Independent of industry-aggregate weighting.';
+          themeAlphaInline = `<span style="font-size:9px;color:var(--color-text-tertiary);margin-left:8px">vs ${benchTicker} <span style="color:${taColor};font-weight:600">${dollarStr}</span> <span style="color:${taColor};opacity:0.85" title="${ppTooltip}">(${ppStr})</span></span>`;
         } else if (tickerLots.length > 0 && getThemeBenchmark(tickerLots[0].theme)) {
           // Theme is mapped but data missing — show placeholder
           const benchTicker = getThemeBenchmark(tickerLots[0].theme);
@@ -5310,10 +5364,14 @@ function _renderCardOverlay(type) {
         let themeAlphaCell;
         if (allHaveTheme) {
           const totalThemeDollar = lotAlphas.reduce((s, ta) => s + ta.themeAlphaDollar, 0);
+          const totalInvestedLots = lotAlphas.reduce((s, ta) => s + ta.invested, 0);
+          const positionPp = totalInvestedLots > 0 ? (totalThemeDollar / totalInvestedLots) * 100 : 0;
           const benchTicker = lotAlphas[0].benchTicker;
           const taColor = totalThemeDollar > 0 ? 'var(--color-text-success)' : totalThemeDollar < 0 ? 'var(--color-text-danger)' : 'var(--color-text-tertiary)';
           const dollarStr = (totalThemeDollar >= 0 ? '+' : '') + fmtDollarWhole(totalThemeDollar);
-          themeAlphaCell = '<span style="color:var(--color-text-tertiary);font-size:9px">vs ' + benchTicker + '</span><br><span style="color:' + taColor + ';font-weight:600">' + dollarStr + '</span>';
+          const ppStr = (positionPp >= 0 ? '+' : '') + positionPp.toFixed(0) + 'pp';
+          const ppTooltip = 'Position-specific pp: this ticker\'s return minus theme benchmark return over the holding period.';
+          themeAlphaCell = '<span style="color:var(--color-text-tertiary);font-size:9px">vs ' + benchTicker + '</span><br><span style="color:' + taColor + ';font-weight:600">' + dollarStr + '</span> <span style="color:' + taColor + ';opacity:0.85;font-size:10px" title="' + ppTooltip + '">(' + ppStr + ')</span>';
         } else if (tickerLots.length > 0 && getThemeBenchmark(tickerLots[0].theme)) {
           const benchTicker = getThemeBenchmark(tickerLots[0].theme);
           themeAlphaCell = '<span style="color:var(--color-text-tertiary);font-size:9px">vs ' + benchTicker + '</span><br><span style="color:var(--color-text-tertiary)">—</span>';
@@ -5410,15 +5468,19 @@ function _renderCardOverlay(type) {
       const lotsNote = t.lots.length > 1 ? '<span style="font-size:9px;color:var(--color-text-tertiary);margin-left:5px">' + t.lots.length + ' lots</span>' : '';
       const glColor = t.totalGl >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
 
-      // Theme alpha across lots within this ticker
+      // Theme alpha across lots within this ticker — per-position pp weighted within the ticker
       const lotAlphas = t.lots.map(p => calcThemeAlpha(p));
       const allHaveAlpha = lotAlphas.every(ta => ta !== null);
       let themeAlphaCell = '<span style="color:var(--color-text-tertiary);font-style:italic;font-size:10px">no theme data</span>';
       if (allHaveAlpha && lotAlphas.length > 0) {
         const totalThemeDollar = lotAlphas.reduce((s, ta) => s + ta.themeAlphaDollar, 0);
+        const totalInvestedLots = lotAlphas.reduce((s, ta) => s + ta.invested, 0);
+        const positionPp = totalInvestedLots > 0 ? (totalThemeDollar / totalInvestedLots) * 100 : 0;
         const tColor = totalThemeDollar > 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
         const dollarStr = (totalThemeDollar >= 0 ? '+' : '') + fmtDollarWhole(totalThemeDollar);
-        themeAlphaCell = '<span style="color:' + tColor + ';font-weight:600">' + dollarStr + '</span>';
+        const ppStr = (positionPp >= 0 ? '+' : '') + positionPp.toFixed(0) + 'pp';
+        const ppTooltip2 = 'Position-specific pp: this ticker\'s return minus theme benchmark return over the holding period. Differs from industry-aggregate pp (capital-weighted) shown in the header.';
+        themeAlphaCell = '<span style="color:' + tColor + ';font-weight:600">' + dollarStr + '</span> <span style="color:' + tColor + ';opacity:0.85;font-size:10px" title="' + ppTooltip2 + '">(' + ppStr + ')</span>';
       }
 
       // Held bucket — use the oldest lot's buy date (most conservative for soak/maturity reads)
@@ -5571,22 +5633,24 @@ function showSpotlightOverlay(signal) {
       'This isn\'t bad — within-theme alpha is genuine skill — but it suggests the broader sector bet may not be the right deployment of risk capital. ' +
       'Worth asking whether you\'d rather have this exposure in this sector specifically, or in a broader index that\'s doing similar work with less concentration risk.';
   } else if (label === 'In soak — UNUSUAL drag, review') {
-    // NEW — in-soak override surfacing extreme negative theme α
+    // NEW — in-soak override surfacing extreme negative theme α at any single position
     const themeOpen6 = open.filter(p => p.theme === name);
-    const themeAlphas6 = themeOpen6.map(p => calcThemeAlpha(p)).filter(ta => ta !== null);
-    const ppAvg = themeAlphas6.length > 0 ? themeAlphas6.reduce((s,ta)=>s+ta.themeAlphaPct,0) / themeAlphas6.length : 0;
-    const benchTicker6 = themeAlphas6.length > 0 ? themeAlphas6[0].benchTicker : 'theme benchmark';
+    const aggr6 = aggregateThemeAlpha(themeOpen6);
+    const benchTicker6 = aggr6 ? aggr6.benchTicker : 'theme benchmark';
+    const worstPp = aggr6 ? Math.abs(aggr6.worstPositionPp) : 0;
+    const worstTicker = aggr6 ? esc(aggr6.worstPosition.ticker) : 'a position';
     explanation = name + ' is still in soak (positions held below the per-sleeve threshold), so any verdict here is preliminary. ' +
-      'But the position is trailing ' + benchTicker6 + ' by ' + Math.abs(ppAvg).toFixed(0) + 'pp, which is more than typical timing noise can explain. ' +
-      'Worth a closer look even though the soak isn\'t complete. The honest read: data is incomplete, but the signal is strong enough to surface during the wait.';
+      'But ' + worstTicker + ' is trailing ' + benchTicker6 + ' by ' + worstPp.toFixed(0) + 'pp, which is more than typical timing noise can explain. ' +
+      'Worth a closer look even though the soak isn\'t complete. The honest read: data is incomplete, but the per-position signal is strong enough to surface during the wait.';
   } else if (label === 'In soak — strong early signal') {
-    // NEW — in-soak override surfacing extreme positive theme α
+    // NEW — in-soak override surfacing extreme positive theme α at any single position
     const themeOpen7 = open.filter(p => p.theme === name);
-    const themeAlphas7 = themeOpen7.map(p => calcThemeAlpha(p)).filter(ta => ta !== null);
-    const ppAvg7 = themeAlphas7.length > 0 ? themeAlphas7.reduce((s,ta)=>s+ta.themeAlphaPct,0) / themeAlphas7.length : 0;
-    const benchTicker7 = themeAlphas7.length > 0 ? themeAlphas7[0].benchTicker : 'theme benchmark';
+    const aggr7 = aggregateThemeAlpha(themeOpen7);
+    const benchTicker7 = aggr7 ? aggr7.benchTicker : 'theme benchmark';
+    const bestPp = aggr7 ? aggr7.bestPositionPp : 0;
+    const bestTicker = aggr7 ? esc(aggr7.bestPosition.ticker) : 'a position';
     explanation = name + ' is still in soak (positions held below the per-sleeve threshold), so this is preliminary. ' +
-      'But the position is beating ' + benchTicker7 + ' by ' + ppAvg7.toFixed(0) + 'pp, which is stronger than typical early performance. ' +
+      'But ' + bestTicker + ' is beating ' + benchTicker7 + ' by ' + bestPp.toFixed(0) + 'pp, which is stronger than typical early performance. ' +
       'Worth noting, but don\'t act yet — let the soak complete to confirm the signal isn\'t timing.';
   } else if (label === 'Capital Not Working') {
     // DUAL-LENS — trailing both SPX and theme
@@ -5612,27 +5676,31 @@ function showSpotlightOverlay(signal) {
       'This is a within-theme stock selection signal: the theme bet may or may not be working overall, but inside it, your picks are not moving together. Worth asking whether the laggards are differentiated bets that need more time, or redundant ones that should be re-evaluated separately. (This signal compares your positions to each other — not to a market benchmark.)';
   }
 
-  // Compute aggregate theme alpha for this signal's industry
+  // Compute aggregate theme alpha for this signal's industry — using dollar-weighted method
   const themeOpen = open.filter(p => p.theme === name);
-  const themeAlphas = themeOpen.map(p => calcThemeAlpha(p)).filter(ta => ta !== null);
-  const themeAlphaTotal = themeAlphas.length > 0
-    ? themeAlphas.reduce((s, ta) => s + ta.themeAlphaDollar, 0)
-    : null;
+  const themeAggr = aggregateThemeAlpha(themeOpen);
+  const themeAlphaTotal = themeAggr ? themeAggr.totalDollar : null;
+  const themeWeightedPp = themeAggr ? themeAggr.weightedPp : null;
   const themeAlphaColor = themeAlphaTotal === null ? 'var(--color-text-tertiary)'
     : themeAlphaTotal >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
   const benchTicker = getThemeBenchmark(name);
   const themeAlphaLabel = benchTicker ? 'vs ' + benchTicker : 'Theme α';
+  const themePpStr = themeWeightedPp !== null
+    ? ((themeWeightedPp >= 0 ? '+' : '') + themeWeightedPp.toFixed(1) + 'pp')
+    : null;
+  const ppTooltip = 'Capital-weighted percentage points: total dollar deficit/surplus divided by total invested capital across this industry. Differs from per-position pp shown on individual rows.';
 
   content.innerHTML =
     '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:' + borderColor + ';margin-bottom:6px">' + label + '</div>' +
     '<div style="font-size:20px;font-weight:700;color:var(--color-text-primary);margin-bottom:4px;border-left:3px solid ' + (THEME_COLORS[name]||'#94a3b8') + ';padding-left:10px">' + esc(name) + '</div>' +
     '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:18px;padding-left:13px">' + sublabel + '</div>' +
-    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;padding:12px;background:var(--color-background-tertiary);border-radius:var(--border-radius-md)">' +
+    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:8px;padding:12px;background:var(--color-background-tertiary);border-radius:var(--border-radius-md)">' +
       '<div><div style="font-size:9px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">Concentration</div><div style="font-size:18px;font-weight:700;color:var(--color-text-secondary)">' + pct.toFixed(1) + '%</div></div>' +
       '<div><div style="font-size:9px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">vs S&P</div><div style="font-size:18px;font-weight:700;color:' + alphaColor + '">' + (alpha!==null?fmtDollarWhole(alpha):'—') + '</div></div>' +
-      '<div><div style="font-size:9px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">' + themeAlphaLabel + '</div><div style="font-size:18px;font-weight:700;color:' + themeAlphaColor + '">' + (themeAlphaTotal!==null?(themeAlphaTotal>=0?'+':'')+fmtDollarWhole(themeAlphaTotal):'—') + '</div></div>' +
+      '<div><div style="font-size:9px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">' + themeAlphaLabel + '</div><div style="font-size:18px;font-weight:700;color:' + themeAlphaColor + '">' + (themeAlphaTotal!==null?(themeAlphaTotal>=0?'+':'')+fmtDollarWhole(themeAlphaTotal):'—') + '</div>' + (themePpStr ? '<div style="font-size:10px;font-weight:600;color:' + themeAlphaColor + ';opacity:0.85;margin-top:1px" title="' + ppTooltip + '">' + themePpStr + '</div>' : '') + '</div>' +
       '<div><div style="font-size:9px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">G/L</div><div style="font-size:18px;font-weight:700;color:' + glColor + '">' + fmtDollarWhole(realGl) + '</div></div>' +
     '</div>' +
+    '<div style="font-size:9px;color:var(--color-text-tertiary);font-style:italic;margin-bottom:18px;padding:0 4px">Theme α aggregate is capital-weighted (dollar deficit ÷ invested capital). Per-position pp shown on individual rows reflects position-specific deviation.</div>' +
     '<div style="font-size:12px;line-height:1.7;color:var(--color-text-secondary)">' + explanation + '</div>';
 
   ov.style.display = 'flex';
@@ -5703,14 +5771,13 @@ function renderDashboardThemeSpotlight() {
     // mapped or no positions have backfill data — in that case, alpha-quadrant signals can't fire
     // and we fall back to SPX-only signals.
     const themeOpenForAggr = open.filter(p => p.theme === name);
-    const themeAlphasForAggr = themeOpenForAggr.map(p => calcThemeAlpha(p)).filter(ta => ta !== null);
-    const themeAlphaTotal = themeAlphasForAggr.length > 0
-      ? themeAlphasForAggr.reduce((s, ta) => s + ta.themeAlphaDollar, 0)
-      : null;
-    // Theme α in pp (percentage points) — used for soak-period UNUSUAL detection
-    const themeAlphaPpAvg = themeAlphasForAggr.length > 0
-      ? themeAlphasForAggr.reduce((s, ta) => s + ta.themeAlphaPct, 0) / themeAlphasForAggr.length
-      : null;
+    const themeAggrFor = aggregateThemeAlpha(themeOpenForAggr);
+    const themeAlphaTotal = themeAggrFor ? themeAggrFor.totalDollar : null;
+    // Per-position pp extremes — used for UNUSUAL detection (any single position trailing/beating >15pp)
+    const themeWorstPp = themeAggrFor ? themeAggrFor.worstPositionPp : null;
+    const themeBestPp = themeAggrFor ? themeAggrFor.bestPositionPp : null;
+    const themeWorstTicker = themeAggrFor ? themeAggrFor.worstPosition.ticker : null;
+    const themeBestTicker = themeAggrFor ? themeAggrFor.bestPosition.ticker : null;
 
     // ── Soak status for this industry ──
     // Industry is "past soak" if EVERY position past its sleeve threshold; "in soak" otherwise.
@@ -5942,21 +6009,22 @@ function renderDashboardThemeSpotlight() {
         score: -score });
     }
 
-    // 12. Soak gating UNUSUAL overrides — fire only when industry is in soak AND theme α deviation
-    // exceeds the 15pp UNUSUAL threshold. Suppresses normal-magnitude in-soak signals (which would
-    // be noise), surfaces extreme cases regardless of soak.
-    if (!isAllBalance && !allPastSoak && themeAlphaPpAvg !== null) {
-      if (themeAlphaPpAvg < -15) {
-        const score = Math.abs(themeAlphaPpAvg) / 5;
+    // 12. Soak gating UNUSUAL overrides — fire only when industry is in soak AND ANY single position
+    // deviates beyond the 15pp UNUSUAL threshold. Worst-position-based (not aggregate-based) so that
+    // dramatic outliers surface even if the industry's capital-weighted pp looks tame.
+    // Description references the actual offending position by ticker.
+    if (!isAllBalance && !allPastSoak && themeWorstPp !== null) {
+      if (themeWorstPp < -15) {
+        const score = Math.abs(themeWorstPp) / 5;
         signals.push({ name, color, d, alpha, pct, realGl, themeAlphaTotal,
           label: 'In soak — UNUSUAL drag, review',
-          sublabel: 'Trailing theme by ' + Math.abs(themeAlphaPpAvg).toFixed(0) + 'pp during soak — more than typical timing noise',
+          sublabel: themeWorstTicker + ' trailing theme by ' + Math.abs(themeWorstPp).toFixed(0) + 'pp during soak — more than typical timing noise',
           borderColor: 'var(--color-text-danger)', score });
-      } else if (themeAlphaPpAvg > 15) {
-        const score = themeAlphaPpAvg / 5;
+      } else if (themeBestPp > 15) {
+        const score = themeBestPp / 5;
         signals.push({ name, color, d, alpha, pct, realGl, themeAlphaTotal,
           label: 'In soak — strong early signal',
-          sublabel: 'Beating theme by ' + themeAlphaPpAvg.toFixed(0) + 'pp during soak — stronger than typical early performance',
+          sublabel: themeBestTicker + ' beating theme by ' + themeBestPp.toFixed(0) + 'pp during soak — stronger than typical early performance',
           borderColor: 'var(--color-text-success)', score: -score });
       }
     }
@@ -6189,6 +6257,8 @@ function fmtThemeAlphaSummary(themeName) {
   }
 
   const totalDollar = withAlpha.reduce((s, x) => s + x.alpha.themeAlphaDollar, 0);
+  const totalInvested = withAlpha.reduce((s, x) => s + x.alpha.invested, 0);
+  const weightedPp = totalInvested > 0 ? (totalDollar / totalInvested) * 100 : 0;
   const beating = withAlpha.filter(x => x.alpha.themeAlphaPct > 0).length;
   const total = withAlpha.length;
 
@@ -6196,6 +6266,7 @@ function fmtThemeAlphaSummary(themeName) {
   if (totalDollar > 50) dollarColor = 'var(--color-text-success)';
   else if (totalDollar < -50) dollarColor = 'var(--color-text-danger)';
   const dollarStr = (totalDollar >= 0 ? '+' : '') + fmtDollarWhole(totalDollar);
+  const ppStr = (weightedPp >= 0 ? '+' : '') + weightedPp.toFixed(1) + 'pp';
 
   let beatColor = 'var(--color-text-tertiary)';
   if (beating === total && total > 0) beatColor = 'var(--color-text-success)';
@@ -6206,7 +6277,9 @@ function fmtThemeAlphaSummary(themeName) {
     ? ` <span style="color:var(--color-text-tertiary);opacity:0.6">(${withAlpha.length}/${themePositions.length})</span>`
     : '';
 
-  return `<div style="font-size:9px;margin-top:2px"><span style="color:var(--color-text-tertiary)">vs ${ticker}:</span> <span style="color:${dollarColor};font-weight:600">${dollarStr}</span> <span style="color:var(--color-text-tertiary)">·</span> <span style="color:${beatColor}">${beating}/${total} beating</span>${partialNote}</div>`;
+  const ppTooltip = 'Capital-weighted percentage points: total dollar deficit/surplus divided by total invested capital across this industry. Differs from per-position pp shown on individual rows.';
+
+  return `<div style="font-size:9px;margin-top:2px"><span style="color:var(--color-text-tertiary)">vs ${ticker}:</span> <span style="color:${dollarColor};font-weight:600">${dollarStr}</span> <span style="color:${dollarColor};font-weight:500" title="${ppTooltip}">(${ppStr})</span> <span style="color:var(--color-text-tertiary)">·</span> <span style="color:${beatColor}">${beating}/${total} beating</span>${partialNote}</div>`;
 }
 
 function fmtBenchmarkLine(themeName) {
