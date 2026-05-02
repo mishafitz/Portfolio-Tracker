@@ -4864,6 +4864,25 @@ function renderSleeveRef() {
         const themeTotal = open.filter(p => p.theme === t.theme).reduce((s, p) => s + (calcPos(p).exitValue || 0), 0);
         const pctTheme = themeTotal > 0 ? (t.value / themeTotal) * 100 : 0;
 
+        // Per-row theme alpha — aggregate across all open lots of this ticker in this sleeve.
+        // (A single ticker can appear in multiple lots with the same theme.)
+        const tickerLots = open.filter(p => p.ticker === t.ticker && p.sleeve === sleeve);
+        const lotAlphas = tickerLots.map(p => calcThemeAlpha(p));
+        const allHaveAlpha = lotAlphas.length > 0 && lotAlphas.every(ta => ta !== null);
+        let themeAlphaInline = '';
+        if (allHaveAlpha) {
+          const totalThemeDollar = lotAlphas.reduce((s, ta) => s + ta.themeAlphaDollar, 0);
+          const benchTicker = lotAlphas[0].benchTicker;
+          const taColor = totalThemeDollar > 0 ? 'var(--color-text-success)' : totalThemeDollar < 0 ? 'var(--color-text-danger)' : 'var(--color-text-tertiary)';
+          const dollarStr = (totalThemeDollar >= 0 ? '+' : '') + fmtDollarWhole(totalThemeDollar);
+          themeAlphaInline = `<span style="font-size:9px;color:var(--color-text-tertiary);margin-left:8px">vs ${benchTicker} <span style="color:${taColor};font-weight:600">${dollarStr}</span></span>`;
+        } else if (tickerLots.length > 0 && getThemeBenchmark(tickerLots[0].theme)) {
+          // Theme is mapped but data missing — show placeholder
+          const benchTicker = getThemeBenchmark(tickerLots[0].theme);
+          themeAlphaInline = `<span style="font-size:9px;color:var(--color-text-tertiary);margin-left:8px">vs ${benchTicker} —</span>`;
+        }
+        // If no theme benchmark mapped at all, show nothing (no clutter)
+
         return `<div style="padding:5px 0;border-bottom:1px solid var(--color-border-tertiary)">
           <div style="display:flex;justify-content:space-between;align-items:start">
             <div>
@@ -4879,7 +4898,10 @@ function renderSleeveRef() {
                 })()}
               </div>
             </div>
-            <span style="font-size:9px;color:var(--color-text-tertiary)">${fmtDollarWhole(t.value)}</span>
+            <div style="display:flex;align-items:baseline;gap:0;white-space:nowrap">
+              <span style="font-size:9px;color:var(--color-text-tertiary)">${fmtDollarWhole(t.value)}</span>
+              ${themeAlphaInline}
+            </div>
           </div>
           <div style="display:flex;gap:8px;margin-top:2px;flex-wrap:wrap">
             <span style="font-size:9px;color:var(--color-text-tertiary)">Strategy <span style="color:${color};font-weight:600">${pctSleeve.toFixed(1)}%</span></span>
