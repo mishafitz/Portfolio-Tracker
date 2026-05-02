@@ -5475,9 +5475,7 @@ function showSpotlightOverlay(signal) {
   },0);
 
   let explanation = '';
-  if (label === 'Capital Not Working') {
-    explanation = name + ' has ' + fmtDollarWhole(d.value) + ' deployed across ' + d.tickers.length + ' position' + (d.tickers.length>1?'s':'') + ', held for over 6 months, generating only ' + fmtDollarWhole(alpha||0) + ' above what the index would have returned on the same capital. That works out to roughly ' + (d.invested>0&&alpha!==null?(alpha/d.invested*100).toFixed(2):'0.00') + '% alpha per dollar invested — near zero. The capital is sitting in an industry that is not outperforming its simplest alternative.';
-  } else if (label === 'Overweight & Trailing') {
+  if (label === 'Overweight & Trailing') {
     const industries = {};
     open.forEach(p => { industries[p.theme] = 1; });
     explanation = name + ' makes up ' + pct.toFixed(1) + '% of your managed portfolio — well above your average industry concentration of ' + (100/Object.keys(industries).length).toFixed(1) + '%. Despite the large exposure, it has generated ' + fmtDollarWhole(alpha||0) + ' vs the index. You are taking on more concentration risk than average in an industry that is returning less than the index on that capital.';
@@ -5490,7 +5488,7 @@ function showSpotlightOverlay(signal) {
   } else if (label === 'Concentration Drift') {
     explanation = name + ' has grown to ' + pct.toFixed(1) + '% of your managed portfolio without any recent buy decisions — this growth came from price appreciation alone. You did not actively choose to increase your exposure here, but your portfolio is now more concentrated in this industry than it was when you last made a deliberate decision about it.';
   } else if (label === 'Thesis Industry Lagging') {
-    explanation = 'Your Thesis Plays are ahead of the index by ' + fmtDollarWhole(thesisTotalAlpha) + ' overall — your conviction is working. But ' + name + ' is the exception, trailing the index by ' + fmtDollarWhole(Math.abs(alpha||0)) + '. The thesis is playing out across most of your positions, but not here. Worth deciding whether this is a timing issue or a signal that this industry is not the right vehicle for the thesis.';
+    explanation = 'Your Thesis Plays sleeve generates alpha overall — meaning your conviction-driven bets are working broadly. But ' + name + ' is the dilution: trailing SPX by ' + fmtDollarWhole(Math.abs(alpha||0)) + ' AND trailing the theme benchmark. The thesis playbook is succeeding elsewhere, just not through this industry. Worth deciding whether this is a timing issue (thesis still maturing) or a signal that this industry is the wrong vehicle for the broader thesis approach.';
   } else if (label === 'Opportunity Cost') {
     explanation = name + ' has generated a real gain of ' + fmtDollarWhole(realGl) + ' — so on paper it looks positive. But the index, given the same capital on the same dates, would have returned ' + fmtDollarWhole((alpha||0) + realGl) + '. The difference — ' + fmtDollarWhole(Math.abs(alpha||0)) + ' — is what you gave up by being in ' + name + ' instead of the index. The gain is real but the opportunity cost is larger.';
   } else if (label === 'Single Position Risk') {
@@ -5507,9 +5505,73 @@ function showSpotlightOverlay(signal) {
       explanation = tickers + ' ' + (noThesis.length>1?'have':'has') + ' been held for over a year in ' + name + ' with no thesis recorded. The decision journal is empty for a position you have been sitting in for a long time. Worth writing down why you still own ' + (noThesis.length>1?'them':'it') + ' — or deciding whether you do.';
     }
   } else if (label === 'Carrying the Portfolio') {
-    explanation = name + ' is generating ' + fmtDollarWhole(alpha||0) + ' above what the index would have returned — the strongest alpha contributor in your managed portfolio. At ' + pct.toFixed(1) + '% concentration it is earning its place. This is the industry doing the most work.';
+    // DUAL-LENS — fires only when beating both SPX and theme
+    const themeOpen2 = open.filter(p => p.theme === name);
+    const themeAlphas2 = themeOpen2.map(p => calcThemeAlpha(p)).filter(ta => ta !== null);
+    const themeTotal2 = themeAlphas2.length > 0 ? themeAlphas2.reduce((s,ta)=>s+ta.themeAlphaDollar,0) : null;
+    const benchTicker2 = themeAlphas2.length > 0 ? themeAlphas2[0].benchTicker : null;
+    explanation = name + ' is generating real alpha across both reference lenses. You\'re beating SPX by ' + fmtDollarWhole(alpha||0) + ' (the broad market measure)' +
+      (benchTicker2 && themeTotal2 !== null ? ' and beating ' + benchTicker2 + ' by ' + fmtDollarWhole(themeTotal2) + ' (the more honest sector-relative measure)' : '') +
+      '. When both lenses agree on a winner, the conviction is real — you\'re not just riding sector tailwinds, and you\'re not just outpacing a too-easy benchmark. This is the kind of result the active book is supposed to produce.';
   } else if (label === 'Thesis Paying Off') {
-    explanation = 'Your Thesis Plays in ' + name + ' are generating meaningful alpha above the index. The conviction is paying off here. The concentration appears justified by the returns it is producing.';
+    // DUAL-LENS — Thesis sleeve picks beating both
+    const themeOpen3 = open.filter(p => p.theme === name);
+    const themeAlphas3 = themeOpen3.map(p => calcThemeAlpha(p)).filter(ta => ta !== null);
+    const themeTotal3 = themeAlphas3.length > 0 ? themeAlphas3.reduce((s,ta)=>s+ta.themeAlphaDollar,0) : null;
+    const benchTicker3 = themeAlphas3.length > 0 ? themeAlphas3[0].benchTicker : null;
+    explanation = 'Your Thesis Plays in ' + name + ' are generating alpha across both reference lenses: beating SPX by ' + fmtDollarWhole(alpha||0) +
+      (benchTicker3 && themeTotal3 !== null ? ' and beating ' + benchTicker3 + ' by ' + fmtDollarWhole(themeTotal3) : '') +
+      '. This is the strongest read for thesis-driven picking — conviction is paying off vs both the broad market AND the easier sector-comparison benchmark. Whatever process generated this thesis should be examined and repeated where applicable.';
+  } else if (label === 'Hidden Drag') {
+    // NEW — looks like winning vs SPX but losing alpha to theme
+    const themeOpen4 = open.filter(p => p.theme === name);
+    const themeAlphas4 = themeOpen4.map(p => calcThemeAlpha(p)).filter(ta => ta !== null);
+    const themeTotal4 = themeAlphas4.length > 0 ? themeAlphas4.reduce((s,ta)=>s+ta.themeAlphaDollar,0) : null;
+    const benchTicker4 = themeAlphas4.length > 0 ? themeAlphas4[0].benchTicker : null;
+    explanation = name + ' looks like a winner against SPX (+' + fmtDollarWhole(alpha||0) + ') but is actually losing alpha to ' +
+      (benchTicker4 || 'the theme benchmark') + ' (' + (themeTotal4 !== null ? fmtDollarWhole(themeTotal4) : '—') + '). ' +
+      'This is the most subtle drag pattern: your account statement says you\'re winning, but you\'re underperforming the easier comparison. ' +
+      'The capital is producing returns, just less than a passive sector ETF would have. Worth asking whether your specific picks within this industry are earning their conviction, or whether you should have just bought the theme directly.';
+  } else if (label === 'Theme Leader') {
+    // NEW — beating theme but not SPX meaningfully
+    const themeOpen5 = open.filter(p => p.theme === name);
+    const themeAlphas5 = themeOpen5.map(p => calcThemeAlpha(p)).filter(ta => ta !== null);
+    const themeTotal5 = themeAlphas5.length > 0 ? themeAlphas5.reduce((s,ta)=>s+ta.themeAlphaDollar,0) : null;
+    const benchTicker5 = themeAlphas5.length > 0 ? themeAlphas5[0].benchTicker : null;
+    explanation = name + ' is winning against ' + (benchTicker5 || 'the theme benchmark') + ' (+' +
+      (themeTotal5 !== null ? fmtDollarWhole(themeTotal5) : '—') + ') but not meaningfully against SPX (' +
+      fmtDollarWhole(alpha||0) + '). You\'re picking right within the sector, but the sector itself isn\'t outpacing the broad market. ' +
+      'This isn\'t bad — within-theme alpha is genuine skill — but it suggests the broader sector bet may not be the right deployment of risk capital. ' +
+      'Worth asking whether you\'d rather have this exposure in this sector specifically, or in a broader index that\'s doing similar work with less concentration risk.';
+  } else if (label === 'In soak — UNUSUAL drag, review') {
+    // NEW — in-soak override surfacing extreme negative theme α
+    const themeOpen6 = open.filter(p => p.theme === name);
+    const themeAlphas6 = themeOpen6.map(p => calcThemeAlpha(p)).filter(ta => ta !== null);
+    const ppAvg = themeAlphas6.length > 0 ? themeAlphas6.reduce((s,ta)=>s+ta.themeAlphaPct,0) / themeAlphas6.length : 0;
+    const benchTicker6 = themeAlphas6.length > 0 ? themeAlphas6[0].benchTicker : 'theme benchmark';
+    explanation = name + ' is still in soak (positions held below the per-sleeve threshold), so any verdict here is preliminary. ' +
+      'But the position is trailing ' + benchTicker6 + ' by ' + Math.abs(ppAvg).toFixed(0) + 'pp, which is more than typical timing noise can explain. ' +
+      'Worth a closer look even though the soak isn\'t complete. The honest read: data is incomplete, but the signal is strong enough to surface during the wait.';
+  } else if (label === 'In soak — strong early signal') {
+    // NEW — in-soak override surfacing extreme positive theme α
+    const themeOpen7 = open.filter(p => p.theme === name);
+    const themeAlphas7 = themeOpen7.map(p => calcThemeAlpha(p)).filter(ta => ta !== null);
+    const ppAvg7 = themeAlphas7.length > 0 ? themeAlphas7.reduce((s,ta)=>s+ta.themeAlphaPct,0) / themeAlphas7.length : 0;
+    const benchTicker7 = themeAlphas7.length > 0 ? themeAlphas7[0].benchTicker : 'theme benchmark';
+    explanation = name + ' is still in soak (positions held below the per-sleeve threshold), so this is preliminary. ' +
+      'But the position is beating ' + benchTicker7 + ' by ' + ppAvg7.toFixed(0) + 'pp, which is stronger than typical early performance. ' +
+      'Worth noting, but don\'t act yet — let the soak complete to confirm the signal isn\'t timing.';
+  } else if (label === 'Capital Not Working') {
+    // DUAL-LENS — trailing both SPX and theme
+    const themeOpen8 = open.filter(p => p.theme === name);
+    const themeAlphas8 = themeOpen8.map(p => calcThemeAlpha(p)).filter(ta => ta !== null);
+    const themeTotal8 = themeAlphas8.length > 0 ? themeAlphas8.reduce((s,ta)=>s+ta.themeAlphaDollar,0) : null;
+    const benchTicker8 = themeAlphas8.length > 0 ? themeAlphas8[0].benchTicker : null;
+    explanation = name + ' is trailing across both reference lenses. You\'re behind SPX by ' + fmtDollarWhole(Math.abs(alpha||0)) +
+      (benchTicker8 && themeTotal8 !== null ? ' AND behind ' + benchTicker8 + ' by ' + fmtDollarWhole(Math.abs(themeTotal8)) : '') + '. ' +
+      'This isn\'t sector rotation pain — when both lenses agree on underperformance, it\'s harder to argue the industry is the problem. ' +
+      'Worth asking whether the thesis is intact, whether the position size is right, or whether capital here would do more elsewhere. ' +
+      'Long hold + large position + negative on both fronts is the strongest case for review.';
   } else if (label === 'Theme Dispersion') {
     const stocks = d.tickers.filter(p => !p.isETF && p.daysHeld >= 90 && p.retPct !== null && p.retPct !== undefined);
     const sorted = [...stocks].sort((a,b) => b.retPct - a.retPct);
@@ -5604,6 +5666,36 @@ function renderDashboardThemeSpotlight() {
     const dominantPct = d.value > 0 && sortedTickers[0] ? (sortedTickers[0].value / d.value) * 100 : 0;
     const realGl = open.filter(p=>p.theme===name).reduce((s,p)=>s+(calcPos(p).gainLoss||0),0);
 
+    // ── Theme alpha aggregate for this industry ──
+    // Sum of per-position theme alpha dollars (where computable) for open positions in this theme.
+    // Used by all NEW alpha-quadrant signals (Hidden Drag, Theme Leader) and the modified versions
+    // of the alpha-based signals (Carrying the Portfolio, Capital Not Working, Thesis Industry
+    // Lagging, Thesis Paying Off). Concentration/structural signals are not affected.
+    //
+    // Closed positions excluded (current state only). Returns null if the theme has no benchmark
+    // mapped or no positions have backfill data — in that case, alpha-quadrant signals can't fire
+    // and we fall back to SPX-only signals.
+    const themeOpenForAggr = open.filter(p => p.theme === name);
+    const themeAlphasForAggr = themeOpenForAggr.map(p => calcThemeAlpha(p)).filter(ta => ta !== null);
+    const themeAlphaTotal = themeAlphasForAggr.length > 0
+      ? themeAlphasForAggr.reduce((s, ta) => s + ta.themeAlphaDollar, 0)
+      : null;
+    // Theme α in pp (percentage points) — used for soak-period UNUSUAL detection
+    const themeAlphaPpAvg = themeAlphasForAggr.length > 0
+      ? themeAlphasForAggr.reduce((s, ta) => s + ta.themeAlphaPct, 0) / themeAlphasForAggr.length
+      : null;
+
+    // ── Soak status for this industry ──
+    // Industry is "past soak" if EVERY position past its sleeve threshold; "in soak" otherwise.
+    // Mixed industries treated as in-soak — conservative; we'd rather wait than verdict prematurely.
+    const allPastSoak = themeOpenForAggr.length > 0 && themeOpenForAggr.every(p => {
+      const threshold = SLEEVE_SOAK[p.sleeve];
+      if (!threshold) return true; // no threshold = no soak gate
+      const buyDate = p.dateBought ? new Date(p.dateBought) : null;
+      const days = buyDate ? Math.floor((today - buyDate) / 86400000) : 0;
+      return days >= threshold;
+    });
+
     // Strategy-aware time gates
     // Quality: 60-day floor + big swing override
     // Thesis Plays: 180-day hard floor, no override
@@ -5628,12 +5720,16 @@ function renderDashboardThemeSpotlight() {
       timeQualifies = d.maxDays >= HARD_MIN_DAYS && (matureEnough || bigSwing);
     }
 
-    // 1. Capital Not Working — requires 6 months (already has 180 day check)
-    if (timeQualifies && d.value > avgIndustryValue * 0.8 && d.maxDays > 180 && alphaPerDollar !== null && alphaPerDollar < 0.005) {
-      const score = (d.value / totalValue) * Math.max(0, 0.01 - alphaPerDollar) * 100;
-      if (score > 0.05) signals.push({ name, color, d, alpha, pct, realGl,
+    // 1. Capital Not Working (DUAL-LENS) — requires trailing BOTH SPX and theme.
+    // Modified from alphaPerDollar-only to require explicit dual-lens negative.
+    // Concentration and time gates unchanged.
+    if (timeQualifies && d.value > avgIndustryValue * 0.8 && d.maxDays > 180
+        && alpha !== null && alpha < -300
+        && themeAlphaTotal !== null && themeAlphaTotal < -300) {
+      const score = (d.value / totalValue) * Math.abs(alpha) / 100;
+      if (score > 0.05) signals.push({ name, color, d, alpha, pct, realGl, themeAlphaTotal,
         label: 'Capital Not Working', borderColor: 'var(--color-text-danger)',
-        sublabel: 'Large position, long hold, near-zero alpha per dollar', score });
+        sublabel: 'Trailing both SPX and theme — real drag, not just sector noise', score });
     }
 
     // 2. Overconcentrated & Trailing — 6 month gate or big swing override
@@ -5682,8 +5778,9 @@ function renderDashboardThemeSpotlight() {
         borderColor: '#fbbf24', score });
     }
 
-    // 6. Thesis Industry Lagging — 6 month gate or big swing override
-    if (timeQualifies && alpha !== null && alpha < -200) {
+    // 6. Thesis Industry Lagging (DUAL-LENS) — Thesis sleeve wins overall, but trails BOTH lenses here.
+    if (timeQualifies && alpha !== null && alpha < -200
+        && themeAlphaTotal !== null && themeAlphaTotal < -200) {
       const thesisHere = d.tickers.filter(p => p.sleeve === 'Thesis Plays');
       if (thesisHere.length > 0) {
         const thesisElsewhereAlpha = open
@@ -5695,9 +5792,9 @@ function renderDashboardThemeSpotlight() {
           }, 0);
         if (thesisElsewhereAlpha > 500) {
           const score = Math.abs(alpha) / 100;
-          signals.push({ name, color, d, alpha, pct, realGl,
+          signals.push({ name, color, d, alpha, pct, realGl, themeAlphaTotal,
             label: 'Thesis Industry Lagging',
-            sublabel: 'Your Thesis Plays beat the index overall — but not through ' + name,
+            sublabel: 'Thesis sleeve wins overall, but trails both SPX and theme here',
             borderColor: 'var(--color-text-danger)', score });
         }
       }
@@ -5769,27 +5866,77 @@ function renderDashboardThemeSpotlight() {
         sublabel: 'Negative alpha concentrated in IRA — cannot harvest', score });
     }
 
-    // 8. Carrying the Portfolio — 6 month gate, exclude Portfolio Balance Plays
-    if (!isAllBalance && (matureEnough || alpha >= BIG_POSITIVE_ALPHA) && d.maxDays >= HARD_MIN_DAYS && alpha !== null && alpha > 2000 && alphaPerDollar !== null && alphaPerDollar > 0.05) {
-      signals.push({ name, color, d, alpha, pct, realGl,
+    // 8. Carrying the Portfolio (DUAL-LENS) — requires beating BOTH SPX and theme.
+    // Modified from SPX-only to require theme α > +$300 alongside the steep SPX α requirement.
+    // Asymmetric thresholds (SPX +$2,000 / theme +$300) preserved — the high SPX bar keeps
+    // "exceptional" meaningful, the lower theme bar just confirms it isn't sector tailwind alone.
+    if (!isAllBalance && (matureEnough || alpha >= BIG_POSITIVE_ALPHA) && d.maxDays >= HARD_MIN_DAYS
+        && alpha !== null && alpha > 2000 && alphaPerDollar !== null && alphaPerDollar > 0.05
+        && themeAlphaTotal !== null && themeAlphaTotal > 300) {
+      signals.push({ name, color, d, alpha, pct, realGl, themeAlphaTotal,
         label: 'Carrying the Portfolio', borderColor: 'var(--color-text-success)',
-        sublabel: 'Exceptional alpha — significantly outpacing the index',
+        sublabel: 'Beating SPX and theme — genuine alpha, both lenses',
         score: -(alpha * alphaPerDollar) });
     }
 
-    // 9. Thesis Paying Off — 6 month gate or big positive override
+    // 9. Thesis Paying Off (DUAL-LENS) — Thesis picks beating BOTH SPX and theme.
     const thesisPositions = d.tickers.filter(p => p.sleeve === 'Thesis Plays');
-    if (thesisPositions.length > 0 && alpha !== null && alpha > 300 && timeQualifies) {
+    if (thesisPositions.length > 0 && alpha !== null && alpha > 300 && timeQualifies
+        && themeAlphaTotal !== null && themeAlphaTotal > 300) {
       const thesisAlpha = thesisPositions.reduce((s,p) => s+(p.alpha||0), 0);
-      if (thesisAlpha > 300) signals.push({ name, color, d, alpha, pct, realGl,
+      if (thesisAlpha > 300) signals.push({ name, color, d, alpha, pct, realGl, themeAlphaTotal,
         label: 'Thesis Paying Off', borderColor: 'var(--color-text-success)',
-        sublabel: 'Conviction positions generating meaningful alpha',
+        sublabel: 'Thesis picks beating both SPX and theme — conviction working both ways',
         score: -(thesisAlpha / 100) });
+    }
+
+    // 10. Hidden Drag (NEW) — beating SPX but trailing theme. The "looks-like-winning, actually-losing"
+    // pattern. Hardest signal to spot manually because account statement looks fine. Soak-gated.
+    if (!isAllBalance && allPastSoak
+        && alpha !== null && alpha > 300
+        && themeAlphaTotal !== null && themeAlphaTotal < -300) {
+      const score = Math.abs(themeAlphaTotal) / 100;
+      signals.push({ name, color, d, alpha, pct, realGl, themeAlphaTotal,
+        label: 'Hidden Drag', borderColor: '#fbbf24',
+        sublabel: 'Beating SPX but trailing theme — review thesis vs theme peers',
+        score });
+    }
+
+    // 11. Theme Leader (NEW) — beating theme but not SPX meaningfully. Within-theme picking works,
+    // but the broader sector bet may be the wrong deployment. Soak-gated.
+    // SPX α ceiling at +$500 to keep clear separation from Carrying the Portfolio (which needs +$2,000).
+    if (!isAllBalance && allPastSoak
+        && themeAlphaTotal !== null && themeAlphaTotal > 300
+        && alpha !== null && alpha < 500) {
+      const score = themeAlphaTotal / 100;
+      signals.push({ name, color, d, alpha, pct, realGl, themeAlphaTotal,
+        label: 'Theme Leader', borderColor: 'var(--color-text-info)',
+        sublabel: 'Beating theme but not SPX — sector-relative win, market-neutral',
+        score: -score });
+    }
+
+    // 12. Soak gating UNUSUAL overrides — fire only when industry is in soak AND theme α deviation
+    // exceeds the 15pp UNUSUAL threshold. Suppresses normal-magnitude in-soak signals (which would
+    // be noise), surfaces extreme cases regardless of soak.
+    if (!isAllBalance && !allPastSoak && themeAlphaPpAvg !== null) {
+      if (themeAlphaPpAvg < -15) {
+        const score = Math.abs(themeAlphaPpAvg) / 5;
+        signals.push({ name, color, d, alpha, pct, realGl, themeAlphaTotal,
+          label: 'In soak — UNUSUAL drag, review',
+          sublabel: 'Trailing theme by ' + Math.abs(themeAlphaPpAvg).toFixed(0) + 'pp during soak — more than typical timing noise',
+          borderColor: 'var(--color-text-danger)', score });
+      } else if (themeAlphaPpAvg > 15) {
+        const score = themeAlphaPpAvg / 5;
+        signals.push({ name, color, d, alpha, pct, realGl, themeAlphaTotal,
+          label: 'In soak — strong early signal',
+          sublabel: 'Beating theme by ' + themeAlphaPpAvg.toFixed(0) + 'pp during soak — stronger than typical early performance',
+          borderColor: 'var(--color-text-success)', score: -score });
+      }
     }
   });
 
   // Separate problem signals from positive signals
-  const positiveLabels = new Set(['Carrying the Portfolio', 'Thesis Paying Off']);
+  const positiveLabels = new Set(['Carrying the Portfolio', 'Thesis Paying Off', 'Theme Leader', 'In soak — strong early signal']);
   const problemSignals = signals.filter(s => !positiveLabels.has(s.label));
   const positiveSignals = signals.filter(s => positiveLabels.has(s.label));
 
@@ -5809,16 +5956,32 @@ function renderDashboardThemeSpotlight() {
 
   const top = [...topProblems, ...(topProblems.length < 3 ? topPositive : [])].slice(0, 3);
 
+  // Build "remaining signals" list — every other unique-by-industry signal not in top 3.
+  // Same dedup rule as top (one per industry). Different industries may surface here even if
+  // they didn't make the top 3 score cut. Lets the user see the full picture without losing
+  // the at-a-glance value of the top-3 surface.
+  const topNames = new Set(top.map(s => s.name));
+  const seenRemaining = new Set();
+  const remaining = [...problemSignals, ...positiveSignals]
+    .sort((a, b) => Math.abs(b.score) - Math.abs(a.score))
+    .filter(s => {
+      if (topNames.has(s.name)) return false;          // already in top
+      if (seenRemaining.has(s.name)) return false;     // already counted
+      seenRemaining.add(s.name);
+      return true;
+    });
+
   if (top.length === 0) {
     el.innerHTML = '<div style="background:var(--color-background-secondary);border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px 18px;color:var(--color-text-success);font-size:11px">✓ No signals to surface — portfolio looks healthy across all industries.</div>';
     return;
   }
 
-  // Store signals for overlay access
+  // Store signals for overlay access — both top 3 and remaining (if expanded)
   window._spotlightSignals = {};
   top.forEach(s => { window._spotlightSignals[s.name.replace(/[^a-z0-9]/gi,'_')] = s; });
+  remaining.forEach(s => { window._spotlightSignals[s.name.replace(/[^a-z0-9]/gi,'_')] = s; });
 
-  el.innerHTML = '<div class="theme-intel-grid">' + top.map(({ name, color, d, alpha, pct, realGl, label, sublabel, borderColor }) => {
+  let topHtml = '<div class="theme-intel-grid">' + top.map(({ name, color, d, alpha, pct, realGl, label, sublabel, borderColor }) => {
     const alphaColor = alpha === null ? 'var(--color-text-tertiary)' : alpha >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
     const themeKey = name.replace(/[^a-z0-9]/gi, '_');
     const glColor = realGl >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
@@ -5837,6 +6000,42 @@ function renderDashboardThemeSpotlight() {
       '</div>' +
     '</div>';
   }).join('') + '</div>';
+
+  // ── Expandable section for remaining signals ──
+  // Each remaining signal renders as a compact one-liner with industry name, signal label,
+  // and the same "click for detail" affordance as the top-3 cards. Toggling collapses/expands.
+  let remainingHtml = '';
+  if (remaining.length > 0) {
+    const expanded = window._spotlightExpanded === true;
+    const toggleLabel = expanded
+      ? '− Collapse'
+      : '+ ' + remaining.length + ' more signal' + (remaining.length !== 1 ? 's' : '');
+
+    const rowsHtml = remaining.map(({ name, label, sublabel, borderColor }) => {
+      const themeKey = name.replace(/[^a-z0-9]/gi, '_');
+      return '<div style="display:grid;grid-template-columns:160px 1fr auto;gap:12px;padding:8px 12px;border-bottom:1px solid var(--color-border-tertiary);cursor:pointer;align-items:center" ' +
+        'onmouseenter="this.style.background=\'var(--color-background-tertiary)\'" ' +
+        'onmouseleave="this.style.background=\'\'" ' +
+        'onclick="if(window._spotlightSignals&&window._spotlightSignals[\'' + themeKey + '\']){showSpotlightOverlay(window._spotlightSignals[\'' + themeKey + '\'])}">' +
+        '<span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:' + borderColor + '">' + label + '</span>' +
+        '<span style="font-size:11px;color:var(--color-text-secondary)"><strong style="color:var(--color-text-primary)">' + esc(name) + '</strong> <span style="color:var(--color-text-tertiary)">— ' + sublabel + '</span></span>' +
+        '<span style="font-size:9px;color:var(--color-text-tertiary)">click for detail →</span>' +
+      '</div>';
+    }).join('');
+
+    remainingHtml =
+      '<div style="margin-top:10px">' +
+        '<button onclick="window._spotlightExpanded=' + (!expanded) + ';renderDashboardThemeSpotlight()" ' +
+          'style="background:transparent;border:1px solid var(--color-border-tertiary);color:var(--color-text-secondary);font-size:10px;padding:5px 12px;border-radius:var(--border-radius-sm);cursor:pointer;font-family:inherit;letter-spacing:0.05em">' +
+          toggleLabel +
+        '</button>' +
+        (expanded
+          ? '<div style="margin-top:8px;background:var(--color-background-secondary);border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);overflow:hidden">' + rowsHtml + '</div>'
+          : '') +
+      '</div>';
+  }
+
+  el.innerHTML = topHtml + remainingHtml;
 }
 
 
