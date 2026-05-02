@@ -758,17 +758,26 @@
         <span id="indalpha-toggle-mature-dash" onclick="toggleIndustryAlphaMature(true)" style="font-size:9px;cursor:pointer;padding:2px 8px;border-radius:10px;color:var(--color-text-tertiary);font-weight:400">Matured (≥180d)</span>
       </span>
     </div>
-    <div style="font-size:9px;color:var(--color-text-tertiary);font-style:italic;margin:2px 0 4px;padding:0 2px">Theme α numbers are capital-weighted at the industry level. Click any card for drill-down with per-position pp.</div>
+    <div style="margin:6px 0 12px;padding:10px 14px;background:var(--color-background-secondary);border-left:3px solid var(--color-text-info);border-radius:var(--border-radius-sm);font-size:11px;color:var(--color-text-secondary);line-height:1.55">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><span style="font-size:13px;color:var(--color-text-info)">ⓘ</span><span style="font-weight:700;color:var(--color-text-primary);text-transform:uppercase;letter-spacing:0.05em;font-size:10px">Two pp methods, two different questions</span></div>
+      <div><strong style="color:var(--color-text-primary)">Industry-level pp</strong> (shown on Spotlight cards and Industry Reference headers) is <strong>capital-weighted across positions</strong> — total $ deficit ÷ total invested. It answers: "how much pp alpha did the capital deployed in this whole industry produce?"</div>
+      <div style="margin-top:4px"><strong style="color:var(--color-text-primary)">Per-position pp</strong> (shown in drill-downs and Strategy Reference rows) is just the position's actual deviation from its theme benchmark. It answers: "how is this single ticker performing vs its theme?"</div>
+      <div id="legend-example-spotlight" style="margin-top:6px;padding:7px 10px;background:var(--color-background-tertiary);border-radius:var(--border-radius-sm);font-size:10px"></div>
+    </div>
     <div id="dashboard-theme-spotlight" style="margin-bottom:20px"></div>
 
     <!-- Strategy Reference -->
     <div class="section-heading">Strategy Reference</div>
-    <div style="font-size:9px;color:var(--color-text-tertiary);font-style:italic;margin:2px 0 4px;padding:0 2px">Theme α inline shows position-specific pp (this ticker's return minus theme benchmark over the holding period). For industry-aggregate capital-weighted pp, see Industry Reference.</div>
+    <div style="margin:6px 0 8px;padding:8px 14px;background:var(--color-background-secondary);border-left:3px solid var(--color-text-info);border-radius:var(--border-radius-sm);font-size:11px;color:var(--color-text-secondary);line-height:1.55">
+      <span style="font-size:13px;color:var(--color-text-info);margin-right:6px">ⓘ</span><strong style="color:var(--color-text-primary)">Per-position pp</strong> — pp values shown in this panel are position-specific (this ticker's return minus its theme benchmark over the holding period). They are <strong>not</strong> capital-weighted across the industry. For industry-aggregate capital-weighted pp, see Industry Reference below or click any Industry Spotlight card.
+    </div>
     <div id="sleeve-ref-panel" style="margin:8px 0 12px" onclick="showCardOverlay('stratref')" style="cursor:pointer"></div>
 
     <!-- Industry Reference -->
     <div class="section-heading">Industry Reference</div>
-    <div style="font-size:9px;color:var(--color-text-tertiary);font-style:italic;margin:2px 0 4px;padding:0 2px">Industry header pp is capital-weighted (total dollar deficit ÷ invested capital). Per-position pp shown in drill-down is position-specific. They differ for unbalanced industries — both are honest, just different questions.</div>
+    <div style="margin:6px 0 8px;padding:8px 14px;background:var(--color-background-secondary);border-left:3px solid var(--color-text-info);border-radius:var(--border-radius-sm);font-size:11px;color:var(--color-text-secondary);line-height:1.55">
+      <span style="font-size:13px;color:var(--color-text-info);margin-right:6px">ⓘ</span><strong style="color:var(--color-text-primary)">Two pp methods used in this panel.</strong> The pp shown in each industry card header (next to the dollar deficit) is <strong>capital-weighted across positions</strong>. The per-position pp shown in the drill-down (when you click a card) is <strong>position-specific</strong>. <span id="legend-example-industryref"></span>
+    </div>
     <div id="industry-ref-panel" style="margin:8px 0 12px"></div>
 
     <!-- Trade Simulator Ribbon -->
@@ -3040,6 +3049,98 @@ function aggregateThemeAlpha(positionsArr) {
   };
 }
 
+// Compute a worked-example for the pp legend using current portfolio data.
+// Picks the industry with the largest spread between its capital-weighted aggregate pp
+// and its worst-position pp — that's the case where the two methods most diverge,
+// which is the entire pedagogical point.
+//
+// Returns an HTML string suitable for direct innerHTML, or a generic fallback when
+// no industry has a meaningful spread (>5pp). Spread threshold prevents misleading
+// examples when everything is balanced.
+function computePpLegendExample() {
+  const open = positions.filter(p => !p.closed && p.ticker);
+  const themesInPlay = [...new Set(open.map(p => p.theme).filter(t => t && getThemeBenchmark(t)))];
+  if (themesInPlay.length === 0) {
+    return '<span style="color:var(--color-text-tertiary)">Worked example will appear here once positions have backfilled benchmark data.</span>';
+  }
+
+  let bestExample = null; // { industry, biggestPosition, smallestSimilarPosition, weightedPp, worstPp, ... }
+  let bestSpread = 0;
+
+  themesInPlay.forEach(theme => {
+    const themeOpen = open.filter(p => p.theme === theme);
+    const aggr = aggregateThemeAlpha(themeOpen);
+    if (!aggr || aggr.count < 2) return; // need at least 2 positions to illustrate the difference
+
+    // Spread between aggregate weighted pp and worst-position pp
+    const spread = Math.abs(aggr.worstPositionPp - aggr.weightedPp);
+    if (spread <= bestSpread) return;
+
+    // Find largest-invested position (the one that dominates the weighted aggregate)
+    let largest = null, largestInvested = 0;
+    themeOpen.forEach(p => {
+      const ta = calcThemeAlpha(p);
+      if (!ta) return;
+      if (ta.invested > largestInvested) { largestInvested = ta.invested; largest = { pos: p, alpha: ta }; }
+    });
+    if (!largest) return;
+
+    // Worst per-position alpha
+    const worstAlpha = calcThemeAlpha(aggr.worstPosition);
+    if (!worstAlpha) return;
+
+    bestSpread = spread;
+    bestExample = {
+      industry: theme,
+      benchTicker: aggr.benchTicker,
+      largestTicker: largest.pos.ticker,
+      largestInvested: largest.alpha.invested,
+      largestPp: largest.alpha.themeAlphaPct,
+      worstTicker: aggr.worstPosition.ticker,
+      worstInvested: worstAlpha.invested,
+      worstPp: worstAlpha.themeAlphaPct,
+      weightedPp: aggr.weightedPp
+    };
+  });
+
+  // Fallback if no industry has a spread >5pp
+  if (!bestExample || bestSpread < 5) {
+    return '<span style="color:var(--color-text-tertiary)">Your industries are currently balanced — capital-weighted and per-position pp are within 5pp of each other. The two numbers will diverge more if a small position trails its theme significantly while a large position stays near it.</span>';
+  }
+
+  const ex = bestExample;
+  // Don't repeat the same ticker for "largest" and "worst" if they're the same position
+  // (small portfolios may have the largest position also be the worst — the example is less illustrative)
+  if (ex.largestTicker === ex.worstTicker) {
+    return '<span style="color:var(--color-text-tertiary)">Your industries are currently balanced — capital-weighted and per-position pp do not meaningfully diverge yet.</span>';
+  }
+
+  const fmtK = n => '$' + Math.round(n / 1000) + 'K';
+  const fmtPp = n => (n >= 0 ? '+' : '') + n.toFixed(0) + 'pp';
+  const weightedColor = ex.weightedPp >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
+  const worstColor = ex.worstPp >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
+
+  return '<span style="color:var(--color-text-tertiary)">Worked example — ' + esc(ex.industry) + ':</span> ' +
+    fmtK(ex.largestInvested) + ' in ' + esc(ex.largestTicker) + ' (' + fmtPp(ex.largestPp) + ') + ' +
+    fmtK(ex.worstInvested) + ' in ' + esc(ex.worstTicker) + ' (' + fmtPp(ex.worstPp) + '). ' +
+    'Industry capital-weighted = <strong style="color:' + weightedColor + '">' + fmtPp(ex.weightedPp) + '</strong> (most capital is at ' + esc(ex.largestTicker) + '). ' +
+    esc(ex.worstTicker) + '\'s per-position row still shows <strong style="color:' + worstColor + '">' + fmtPp(ex.worstPp) + '</strong>. Both correct — different questions.';
+}
+
+// Wire the legend example to render into both Spotlight and Industry Reference legend slots.
+// Called by all three render functions (renderSleeveRef, renderDashboardThemeSpotlight, renderIndustryRef)
+// so the example stays calibrated whichever surface triggers a refresh.
+function refreshPpLegendExample() {
+  const html = computePpLegendExample();
+  const spotlightSlot = document.getElementById('legend-example-spotlight');
+  const industryRefSlot = document.getElementById('legend-example-industryref');
+  if (spotlightSlot) spotlightSlot.innerHTML = html;
+  if (industryRefSlot) {
+    // Industry Reference legend uses an inline phrasing; prefix with "For example:"
+    industryRefSlot.innerHTML = ' ' + html;
+  }
+}
+
 function openTakeSnapshotModal() {
   const modal = document.getElementById('snapshot-modal');
   const noteEl = document.getElementById('snapshot-note');
@@ -4974,6 +5075,7 @@ function renderSleeveRef() {
       </div>`;
     }).join('')}
   </div>`;
+  refreshPpLegendExample();
 }
 
 // Keep updateSimulator as a no-op stub so old references don't break
@@ -5070,6 +5172,7 @@ function renderIndustryRef() {
   }).join('');
 
   panel.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;align-items:stretch">${cards}</div>`;
+  refreshPpLegendExample();
 }
 
   const action = document.getElementById('sim-action').value;
@@ -6131,6 +6234,7 @@ function renderDashboardThemeSpotlight() {
   }
 
   el.innerHTML = topHtml + remainingHtml;
+  refreshPpLegendExample();
 }
 
 
