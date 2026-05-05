@@ -1520,6 +1520,9 @@ async function loadPositions() {
   // Run v1 → v2 migration on existing data (idempotent — only does work if needed)
   migratePositionsV1ToV2();
 
+  // Run theme rename migration: old tag strings → canonical names. Idempotent.
+  migrateThemeTags();
+
   // Cleanup: remove fully-empty placeholder positions (legacy from initial seed).
   // Only deletes rows where every meaningful field is blank — won't touch drafts.
   cleanEmptyPlaceholders();
@@ -2296,7 +2299,7 @@ function renderRow(pos) {
     <td>
       <select class="cell-input theme-select" onchange="setField(${pos.id},'theme',this.value)" style="width:130px;cursor:pointer">
         <option value="">— Industry —</option>
-        ${['AI Infrastructure','Semiconductors','Big Tech','Cybersecurity','Financials','Energy & Grid','Commodities','Space & Defense','Biotech & Health','Consumer','Real Estate','Emerging Markets','Broad ETF','Fixed Income','Other'].map(t => `<option value="${t}" ${pos.theme===t?'selected':''}>${t}</option>`).join('')}
+        ${Object.entries(THEMES).filter(([_, cfg]) => cfg.dropdown).map(([t]) => `<option value="${t}" ${pos.theme===t?'selected':''}>${t}</option>`).join('')}
       </select>
     </td>
     <td>
@@ -4857,7 +4860,9 @@ function toggleSimulator() {
     populateSellTickers();
     const themeEl = document.getElementById('sim-theme');
     if (themeEl && themeEl.options.length <= 1) {
-      const themes = ['AI Infrastructure','Semiconductors','Big Tech','Cybersecurity','Financials','Energy & Grid','Commodities','Space & Defense','Biotech & Health','Consumer','Real Estate','Emerging Markets','Broad ETF','Fixed Income','Other'];
+      // Derive dropdown options from canonical THEMES config (filter dropdown:true entries).
+      // Order preserved as defined in THEMES — existing themes first, then universe additions, then escape hatches.
+      const themes = Object.entries(THEMES).filter(([_, cfg]) => cfg.dropdown).map(([name]) => name);
       themes.forEach(t => { const opt = document.createElement('option'); opt.value = t; opt.textContent = t; themeEl.appendChild(opt); });
     }
   }
@@ -6593,12 +6598,16 @@ const THEME_COLORS = {
   'Energy & Grid':     '#facc15',
   'Commodities':       '#fb923c',
   'Space & Defense':   '#c084fc',
-  'Biotech & Health':  '#34d399',
+  'Healthcare':        '#34d399',
   'Consumer':          '#f87171',
   'Real Estate':       '#a3e635',
   'Emerging Markets':  '#fbbf24',
+  'Bonds':             '#6ee7b7',
+  'Consumer Staples':  '#fda4af',
+  'International Developed': '#67e8f9',
+  'Small Caps':        '#fde047',
+  'Utilities':         '#d8b4fe',
   'Broad ETF':         '#94a3b8',
-  'Fixed Income':      '#6ee7b7',
   'Other':             '#64748b',
 };
 
@@ -6607,18 +6616,85 @@ const THEME_COLORS = {
 // Locked from design session. Each theme/sleeve maps to its primary benchmark ETF.
 // "Picking flattering benchmarks defeats the purpose" — these do not change.
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// THEMES — single source of truth for theme configuration
+// ─────────────────────────────────────────────
+// Each theme has:
+//   - benchmark: ETF ticker for theme alpha math (null = no benchmark, no alpha computed)
+//   - inUniverse: shows in Theme Universe surface (true) or hidden (false)
+//   - dropdown: appears in position-tagging dropdown (almost always true)
+//   - inUniverseAs: 'existing' = you typically own positions here; 'missing' = awareness only
+//
+// Adding a new theme: add one line here, that's it. Dropdown, BENCHMARKS, and Theme Universe
+// all derive from this config.
+const THEMES = {
+  // ─── existing themes (you typically have positions here) ───
+  'Big Tech':          { benchmark: 'QQQ',  inUniverse: true,  inUniverseAs: 'existing', dropdown: true },
+  'Semiconductors':    { benchmark: 'SMH',  inUniverse: true,  inUniverseAs: 'existing', dropdown: true },
+  'AI Infrastructure': { benchmark: 'SMH',  inUniverse: true,  inUniverseAs: 'existing', dropdown: true },
+  'Cybersecurity':     { benchmark: 'CIBR', inUniverse: true,  inUniverseAs: 'existing', dropdown: true },
+  'Financials':        { benchmark: 'XLF',  inUniverse: true,  inUniverseAs: 'existing', dropdown: true },
+  'Energy & Grid':     { benchmark: 'XLE',  inUniverse: true,  inUniverseAs: 'existing', dropdown: true },
+  'Commodities':       { benchmark: 'GLD',  inUniverse: true,  inUniverseAs: 'existing', dropdown: true },
+  'Consumer':          { benchmark: 'XLY',  inUniverse: true,  inUniverseAs: 'existing', dropdown: true },
+  'Space & Defense':   { benchmark: 'ITA',  inUniverse: true,  inUniverseAs: 'existing', dropdown: true },
+  // ─── universe additions (awareness surface; benchmark mapped so positions get theme alpha if added) ───
+  'Healthcare':            { benchmark: 'XLV', inUniverse: true, inUniverseAs: 'missing', dropdown: true },
+  'Real Estate':           { benchmark: 'VNQ', inUniverse: true, inUniverseAs: 'missing', dropdown: true },
+  'Bonds':                 { benchmark: 'AGG', inUniverse: true, inUniverseAs: 'missing', dropdown: true },
+  'Consumer Staples':      { benchmark: 'XLP', inUniverse: true, inUniverseAs: 'missing', dropdown: true },
+  'Emerging Markets':      { benchmark: 'VWO', inUniverse: true, inUniverseAs: 'missing', dropdown: true },
+  'International Developed': { benchmark: 'VEA', inUniverse: true, inUniverseAs: 'missing', dropdown: true },
+  'Small Caps':            { benchmark: 'IWM', inUniverse: true, inUniverseAs: 'missing', dropdown: true },
+  'Utilities':             { benchmark: 'XLU', inUniverse: true, inUniverseAs: 'missing', dropdown: true },
+  // ─── escape hatches (no benchmark, no universe row, but selectable) ───
+  'Broad ETF': { benchmark: null, inUniverse: false, dropdown: true },
+  'Other':     { benchmark: null, inUniverse: false, dropdown: true }
+};
+
+// Migration map: old theme names → new canonical names. Run on data load.
+// Add new entries here when renaming. Don't remove entries — needed for backwards compat
+// across multiple migrations.
+const THEME_RENAMES = {
+  'Biotech & Health':      'Healthcare',
+  'Real Estate / REITs':   'Real Estate',
+  'Bonds / Treasuries':    'Bonds',
+  'Fixed Income':          'Bonds'
+};
+
+// Apply theme renames to a theme string. Returns canonical name or original if no rename.
+function canonicalThemeName(theme) {
+  if (!theme) return theme;
+  return THEME_RENAMES[theme] || theme;
+}
+
+// Migration: rewrite theme tags on positions to canonical names. Idempotent —
+// running twice does nothing the second time.
+function migrateThemeTags() {
+  let renamed = 0;
+  positions.forEach(p => {
+    if (p.theme && THEME_RENAMES[p.theme]) {
+      p.theme = THEME_RENAMES[p.theme];
+      renamed++;
+    }
+  });
+  if (renamed > 0) {
+    console.log(`Theme migration: renamed ${renamed} position theme tag(s) to canonical names.`);
+  }
+  return renamed;
+}
+
+// ─────────────────────────────────────────────
+// Derived structures — backwards-compat shims that read from THEMES.
+// All existing code still references BENCHMARKS.themes and THEME_UNIVERSE; these proxies
+// keep that surface intact while the underlying source of truth is consolidated.
+// ─────────────────────────────────────────────
 const BENCHMARKS = {
-  themes: {
-    'Big Tech':          'QQQ',
-    'Semiconductors':    'SMH',
-    'AI Infrastructure': 'SMH',
-    'Cybersecurity':     'CIBR',
-    'Financials':        'XLF',
-    'Energy & Grid':     'XLE',
-    'Commodities':       'GLD',
-    'Consumer':          'XLY',
-    'Space & Defense':   'ITA'
-  },
+  themes: Object.fromEntries(
+    Object.entries(THEMES)
+      .filter(([_, cfg]) => cfg.benchmark !== null)
+      .map(([name, cfg]) => [name, cfg.benchmark])
+  ),
   sleeves: {
     'Quality':                 'SPHQ',
     'Thesis Plays':            null,   // no aggregate benchmark — per-theme alphas only
@@ -6626,40 +6702,13 @@ const BENCHMARKS = {
   }
 };
 
-// Theme Universe — comprehensive set of themes for awareness surface.
-// `existing` themes are ones you have positions in (or could). `missing` are themes you don't
-// currently track but might want awareness of — informational only, not recommendations.
-// Order: existing themes preserve order from BENCHMARKS.themes; missing themes are alphabetical.
-//
-// Used by the Themes tab + dashboard tile to show:
-//   - Which themes exist in the universe
-//   - Recent performance of each theme's benchmark ETF
-//   - Your current $ exposure (or zero) per theme
-//
-// IMPORTANT: this surface is informational. Do not add scoring, ranking, or buy-suggestion logic.
-// The whole point is to address "I don't know what I don't know" without prescribing action.
 const THEME_UNIVERSE = {
-  existing: [
-    { name: 'Big Tech',          ticker: 'QQQ' },
-    { name: 'Semiconductors',    ticker: 'SMH' },
-    { name: 'AI Infrastructure', ticker: 'SMH' },
-    { name: 'Cybersecurity',     ticker: 'CIBR' },
-    { name: 'Financials',        ticker: 'XLF' },
-    { name: 'Energy & Grid',     ticker: 'XLE' },
-    { name: 'Commodities',       ticker: 'GLD' },
-    { name: 'Consumer',          ticker: 'XLY' },
-    { name: 'Space & Defense',   ticker: 'ITA' }
-  ],
-  missing: [
-    { name: 'Bonds / Treasuries',    ticker: 'AGG' },
-    { name: 'Consumer Staples',      ticker: 'XLP' },
-    { name: 'Emerging Markets',      ticker: 'VWO' },
-    { name: 'Healthcare',            ticker: 'XLV' },
-    { name: 'International Developed', ticker: 'VEA' },
-    { name: 'Real Estate / REITs',   ticker: 'VNQ' },
-    { name: 'Small Caps',            ticker: 'IWM' },
-    { name: 'Utilities',             ticker: 'XLU' }
-  ]
+  existing: Object.entries(THEMES)
+    .filter(([_, cfg]) => cfg.inUniverse && cfg.inUniverseAs === 'existing')
+    .map(([name, cfg]) => ({ name, ticker: cfg.benchmark })),
+  missing: Object.entries(THEMES)
+    .filter(([_, cfg]) => cfg.inUniverse && cfg.inUniverseAs === 'missing')
+    .map(([name, cfg]) => ({ name, ticker: cfg.benchmark }))
 };
 
 // Convenience: flat list of all theme universe entries
