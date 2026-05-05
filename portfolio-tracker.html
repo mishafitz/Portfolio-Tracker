@@ -6717,15 +6717,16 @@ async function fetchHistoricalNearby(ticker, targetDate) {
     const result = await fetchHistoricalBenchmarkPrice(ticker, dateStr);
     if (result.price !== null) return { price: result.price, dateUsed: dateStr };
     // Brief pause between rate-limited Polygon calls
-    await new Promise(r => setTimeout(r, 13000));
+    await new Promise(r => setTimeout(r, 12000));
   }
   return { price: null, dateUsed: null };
 }
 
-// Backfill historical prices for all theme universe tickers across YTD/1Y/5Y/10Y windows.
-// Reuses existing fetchHistoricalBenchmarkPrice. Polygon free tier: 5 calls/min, so 32 calls
-// for 8 new tickers × 4 windows = ~7 minutes total. Walks back from target date if a non-trading
-// day is hit. Defensive against rate limits with 13s pause between calls.
+// Backfill historical prices for theme universe tickers we don't already have positions in.
+// Existing-theme tickers (QQQ, SMH, etc.) get their today's price from the regular benchmark refresh
+// and don't need historical anchors here — theme alpha math uses different price points.
+// Polygon free tier: 5 calls/min, so 32 calls for 8 missing tickers × 4 windows = ~6.5 minutes total.
+// Walks back from target date if a non-trading day is hit. 12s pause stays safely under rate limit.
 async function backfillThemeUniverse() {
   const status = document.getElementById('theme-universe-backfill-status');
   if (!polygonKey) {
@@ -6733,38 +6734,57 @@ async function backfillThemeUniverse() {
     return;
   }
 
-  const tickers = themeUniverseTickers();
+  // Only backfill the "missing" tickers — themes you don't currently have exposure to.
+  // Existing themes are already tracked by other systems; no need to fetch historical anchors here.
+  const tickers = THEME_UNIVERSE.missing.map(t => t.ticker);
   const dates = getThemeUniverseTargetDates();
   const windows = ['ytd', '1y', '5y', '10y'];
 
-  let completed = 0;
-  const total = tickers.length * windows.length;
-
-  for (const ticker of tickers) {
+  // Pre-flight: count how many fetches are actually needed (skip cached recent fetches)
+  const needed = [];
+  tickers.forEach(ticker => {
     if (!themeUniverseHistory[ticker]) themeUniverseHistory[ticker] = {};
-    for (const win of windows) {
-      if (status) { status.textContent = `Fetching ${ticker} ${win.toUpperCase()}... (${completed + 1}/${total})`; status.style.color = 'var(--color-text-tertiary)'; }
-      // Skip if we already have this window cached recently (within 7 days)
+    windows.forEach(win => {
       const cached = themeUniverseHistory[ticker][win];
       const cacheAgeOk = cached && cached.fetched && (Date.now() - new Date(cached.fetched).getTime() < 7 * 86400000);
-      if (cacheAgeOk) { completed++; continue; }
+      if (!cacheAgeOk) needed.push({ ticker, win });
+    });
+  });
 
-      const result = await fetchHistoricalNearby(ticker, dates[win]);
-      if (result.price !== null) {
-        themeUniverseHistory[ticker][win] = {
-          price: result.price,
-          dateUsed: result.dateUsed,
-          fetched: new Date().toISOString()
-        };
-      }
-      completed++;
-      // Rate limit: Polygon free tier is 5/min; 13s between calls is safe.
-      await new Promise(r => setTimeout(r, 13000));
+  if (needed.length === 0) {
+    if (status) { status.textContent = `All ${tickers.length * windows.length} windows cached — no fetch needed`; status.style.color = 'var(--color-text-success)'; }
+    renderThemeUniverse();
+    renderThemeUniverseDashTile();
+    return;
+  }
+
+  const startTime = Date.now();
+  let completed = 0;
+
+  for (const { ticker, win } of needed) {
+    const elapsedMin = (Date.now() - startTime) / 60000;
+    const remaining = needed.length - completed;
+    const etaMin = completed > 0 ? Math.round((elapsedMin / completed) * remaining) : Math.round(remaining * 12 / 60);
+    if (status) {
+      status.textContent = `Fetching ${ticker} ${win.toUpperCase()}... (${completed + 1}/${needed.length}) · ~${etaMin}m remaining`;
+      status.style.color = 'var(--color-text-tertiary)';
     }
+
+    const result = await fetchHistoricalNearby(ticker, dates[win]);
+    if (result.price !== null) {
+      themeUniverseHistory[ticker][win] = {
+        price: result.price,
+        dateUsed: result.dateUsed,
+        fetched: new Date().toISOString()
+      };
+    }
+    completed++;
+    // Rate limit: Polygon free tier 5/min; 12s between calls is safe (~5 calls/min).
+    await new Promise(r => setTimeout(r, 12000));
   }
 
   await save();
-  if (status) { status.textContent = `Done — ${completed} of ${total} fetched`; status.style.color = 'var(--color-text-success)'; }
+  if (status) { status.textContent = `Done — ${completed} of ${needed.length} fetched`; status.style.color = 'var(--color-text-success)'; }
   renderThemeUniverse();
   renderThemeUniverseDashTile();
 }
