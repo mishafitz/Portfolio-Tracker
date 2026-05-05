@@ -632,7 +632,6 @@
     <button class="btn btn-sm" onclick="addPosition()">+ Add Position</button>
     <button class="btn btn-sm" onclick="exportData()" style="margin-right:4px">⬇ Export Data</button>
     <label class="btn btn-sm" style="cursor:pointer;margin-right:4px">⬆ Import Data<input type="file" accept=".json" style="display:none" onchange="importData(this)"></label>
-    <button class="btn btn-sm btn-danger" onclick="clearAll()">Clear All</button>
   </div>
 </div>
 
@@ -7948,14 +7947,6 @@ function importData(input) {
     }
   };
   reader.readAsText(file);
-}
-
-function clearAll() {
-  if (!confirm('Delete all positions? This cannot be undone (well, except by regretting your trading choices).')) return;
-  positions = [];
-  nextId = 1;
-  renderAll();
-  scheduleSave();
 }
 
 // ─────────────────────────────────────────────
