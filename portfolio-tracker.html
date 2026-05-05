@@ -6707,19 +6707,40 @@ function getThemeUniverseTargetDates() {
 }
 
 // Walk back from target date until a trading day with a price is found.
-// Caps at 5 days back — beyond that, treat as missing data.
+// Distinguishes between three failure modes:
+//   - "no data" / NOT_FOUND: market was closed (weekend/holiday) — walk back to find trading day
+//   - HTTP 429 (rate limit): pause longer, retry SAME date (don't burn walk-back attempts)
+//   - Other errors: walk back as before (treat as missing trading day)
+// Caps at 5 walk-back attempts per target. Rate-limit retries cap at 3 to avoid infinite loop.
 async function fetchHistoricalNearby(ticker, targetDate) {
   const target = new Date(targetDate + 'T00:00:00Z');
-  for (let offset = 0; offset < 5; offset++) {
+  let rateLimitRetries = 0;
+  const maxRateLimitRetries = 3;
+
+  for (let offset = 0; offset < 5; ) {
     const tryDate = new Date(target);
     tryDate.setDate(tryDate.getDate() - offset);
     const dateStr = tryDate.toISOString().slice(0, 10);
     const result = await fetchHistoricalBenchmarkPrice(ticker, dateStr);
-    if (result.price !== null) return { price: result.price, dateUsed: dateStr };
-    // Brief pause between rate-limited Polygon calls
+
+    if (result.price !== null) {
+      return { price: result.price, dateUsed: dateStr, error: null };
+    }
+
+    // Rate limited — back off, don't burn walk-back attempts
+    const isRateLimit = result.error && (result.error.includes('429') || result.error.toLowerCase().includes('rate'));
+    if (isRateLimit && rateLimitRetries < maxRateLimitRetries) {
+      rateLimitRetries++;
+      // Exponential backoff: 30s, 60s, 90s
+      await new Promise(r => setTimeout(r, 30000 * rateLimitRetries));
+      continue; // retry same date
+    }
+
+    // Non-rate-limit error or genuine no-data — walk back one day
+    offset++;
     await new Promise(r => setTimeout(r, 12000));
   }
-  return { price: null, dateUsed: null };
+  return { price: null, dateUsed: null, error: 'walk-back exhausted' };
 }
 
 // Backfill historical prices for theme universe tickers we don't already have positions in.
@@ -6759,32 +6780,48 @@ async function backfillThemeUniverse() {
   }
 
   const startTime = Date.now();
-  let completed = 0;
+  let attempted = 0;
+  let succeeded = 0;
+  const failures = []; // { ticker, win, error }
 
   for (const { ticker, win } of needed) {
     const elapsedMin = (Date.now() - startTime) / 60000;
-    const remaining = needed.length - completed;
-    const etaMin = completed > 0 ? Math.round((elapsedMin / completed) * remaining) : Math.round(remaining * 12 / 60);
+    const remaining = needed.length - attempted;
+    const etaMin = attempted > 0 ? Math.round((elapsedMin / attempted) * remaining) : Math.round(remaining * 12 / 60);
     if (status) {
-      status.textContent = `Fetching ${ticker} ${win.toUpperCase()}... (${completed + 1}/${needed.length}) · ~${etaMin}m remaining`;
+      status.textContent = `Fetching ${ticker} ${win.toUpperCase()}... (${succeeded}/${needed.length} ok${failures.length > 0 ? `, ${failures.length} failed` : ''}) · ~${etaMin}m remaining`;
       status.style.color = 'var(--color-text-tertiary)';
     }
 
     const result = await fetchHistoricalNearby(ticker, dates[win]);
+    attempted++;
     if (result.price !== null) {
       themeUniverseHistory[ticker][win] = {
         price: result.price,
         dateUsed: result.dateUsed,
         fetched: new Date().toISOString()
       };
+      succeeded++;
+    } else {
+      failures.push({ ticker, win, error: result.error || 'unknown' });
     }
-    completed++;
     // Rate limit: Polygon free tier 5/min; 12s between calls is safe (~5 calls/min).
     await new Promise(r => setTimeout(r, 12000));
   }
 
   await save();
-  if (status) { status.textContent = `Done — ${completed} of ${needed.length} fetched`; status.style.color = 'var(--color-text-success)'; }
+  // Final status — honest about what worked vs what didn't
+  if (status) {
+    if (failures.length === 0) {
+      status.textContent = `Done — ${succeeded}/${needed.length} fetched successfully`;
+      status.style.color = 'var(--color-text-success)';
+    } else {
+      const failureSummary = failures.slice(0, 3).map(f => `${f.ticker} ${f.win.toUpperCase()}`).join(', ');
+      const more = failures.length > 3 ? ` (+${failures.length - 3} more)` : '';
+      status.textContent = `Done — ${succeeded}/${needed.length} ok, ${failures.length} failed: ${failureSummary}${more}. Re-click to retry.`;
+      status.style.color = '#fbbf24';
+    }
+  }
   renderThemeUniverse();
   renderThemeUniverseDashTile();
 }
@@ -6824,6 +6861,11 @@ function renderThemeUniverse() {
   const fmtRet = (n) => n === null ? '<span style="color:var(--color-text-tertiary)">—</span>' :
     `<span style="color:${n >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)'}">${n >= 0 ? '+' : ''}${n.toFixed(1)}%</span>`;
 
+  // Cell shown for existing themes — we deliberately don't fetch historical anchors for them
+  // because their alpha math uses different price points (theme alpha vs your buy/sell dates,
+  // not arbitrary YTD/1Y/5Y/10Y windows). Show a non-alarming "—" with explanatory tooltip.
+  const notTrackedCell = `<span style="color:var(--color-text-tertiary);opacity:0.4" title="Historical windows not tracked for themes you currently own — your existing positions use position-specific theme alpha math instead. See Industry Reference / Industry Spotlight for those.">·</span>`;
+
   const rows = all.map(t => {
     const isExisting = THEME_UNIVERSE.existing.some(e => e.name === t.name);
     const exposure = computeThemeExposure(t.name);
@@ -6833,14 +6875,21 @@ function renderThemeUniverse() {
       ? `<span style="color:var(--color-text-secondary)">${fmtDollarWhole(exposure.dollars)}</span> <span style="color:var(--color-text-tertiary);font-size:9px">(${exposure.percentOfActive.toFixed(1)}%)</span>`
       : `<span style="color:var(--color-text-tertiary);font-style:italic">no exposure</span>`;
 
+    // For existing themes, show "·" muted dots in windowed columns (different from "—" which means
+    // "we tried to fetch this and it failed"). For missing themes, show real returns or "—" if absent.
+    const ytdCell = isExisting ? notTrackedCell : fmtRet(returns.ytd);
+    const oneyCell = isExisting ? notTrackedCell : fmtRet(returns['1y']);
+    const fiveyCell = isExisting ? notTrackedCell : fmtRet(returns['5y']);
+    const tenyCell = isExisting ? notTrackedCell : fmtRet(returns['10y']);
+
     const rowOpacity = isExisting ? '' : 'background:var(--color-background-secondary);';
     return `<tr style="${rowOpacity}">
       <td><strong>${esc(t.name)}</strong></td>
       <td><span style="font-size:10px;color:var(--color-text-tertiary)">${t.ticker}</span></td>
-      <td class="r">${fmtRet(returns.ytd)}</td>
-      <td class="r">${fmtRet(returns['1y'])}</td>
-      <td class="r">${fmtRet(returns['5y'])}</td>
-      <td class="r">${fmtRet(returns['10y'])}</td>
+      <td class="r">${ytdCell}</td>
+      <td class="r">${oneyCell}</td>
+      <td class="r">${fiveyCell}</td>
+      <td class="r">${tenyCell}</td>
       <td class="r">${exposureCell}</td>
     </tr>`;
   }).join('');
