@@ -6812,7 +6812,7 @@ async function backfillThemeUniverse() {
     await new Promise(r => setTimeout(r, 12000));
   }
 
-  await save();
+  await savePositions();
   // Final status — honest about what worked vs what didn't
   if (status) {
     if (failures.length === 0) {
