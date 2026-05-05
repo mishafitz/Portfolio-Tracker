@@ -640,11 +640,14 @@
 <div class="spx-bar">
   <span class="spx-label">S&P Today</span>
   <input id="spx-manual-input" class="spx-manual-input" type="number" step="any" min="0" placeholder="e.g. 7165" title="Type today's S&P — pushes to all open rows" oninput="setSpxToday(this.value)">
+  <span id="spx-stale" style="font-size:9px;color:var(--color-text-tertiary)"></span>
   <span class="spx-manual-hint">↑ update daily — feeds all open positions</span>
   <a class="spx-link" href="https://multpl.com/s-p-500-historical-prices/table/by-month" target="_blank">↗ Historical S&P (multpl.com)</a>
   <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
     <button id="refresh-prices-btn" class="btn btn-sm btn-primary" onclick="refreshAllPrices()" style="font-size:10px;padding:4px 12px">⟳ Refresh Prices</button>
+    <span id="refresh-prices-stale" style="font-size:9px;color:var(--color-text-tertiary)"></span>
     <button id="get-benchmarks-btn" class="btn btn-sm" onclick="getBenchmarkPrices()" style="font-size:10px;padding:4px 12px" title="Fetches benchmark ETF prices (QQQ, SMH, CIBR, XLF, XLE, GLD, XLY, ITA, SPHQ) — needed for snapshots and benchmark display">⟳ Get Benchmarks</button>
+    <span id="get-benchmarks-stale" style="font-size:9px;color:var(--color-text-tertiary)"></span>
     <button id="backfill-btn" class="btn btn-sm" onclick="backfillThemeBenchmarks()" style="font-size:10px;padding:4px 12px" title="One-time historical fetch of benchmark prices on each position's buy/sell dates. Enables theme-relative alpha math.">⟳ Backfill Theme Benchmarks</button>
     <span id="refresh-status" style="font-size:10px;color:var(--color-text-tertiary)"></span>
     <span id="benchmark-status" style="font-size:10px;color:var(--color-text-tertiary)"></span>
@@ -916,12 +919,12 @@
             <div>
               <div style="font-size:9px;color:var(--color-text-tertiary)">LT Gains Realised</div>
               <div id="tax-lt-gains" style="font-size:13px;font-weight:700;color:var(--color-text-tertiary)">$0</div>
-              <div id="tax-lt-est" style="font-size:9px;color:var(--color-text-tertiary)">Est. tax: $0 @ 20%</div>
+              <div id="tax-lt-est" style="font-size:9px;color:var(--color-text-tertiary)">Est. tax: $0 @ 27%</div>
             </div>
             <div>
               <div style="font-size:9px;color:var(--color-text-tertiary)">ST Gains Realised</div>
               <div id="tax-st-gains" style="font-size:13px;font-weight:700;color:var(--color-text-tertiary)">$0</div>
-              <div id="tax-st-est" style="font-size:9px;color:var(--color-text-tertiary)">Est. tax: $0 @ 37%</div>
+              <div id="tax-st-est" style="font-size:9px;color:var(--color-text-tertiary)">Est. tax: $0 @ 36%</div>
             </div>
             <div>
               <div style="font-size:9px;color:var(--color-text-tertiary)">Losses Harvested</div>
@@ -1061,13 +1064,13 @@
     <div class="section-heading">Trim Candidates</div>
     <div class="rebal-controls">
       <span class="rebal-control-label">Short-term rate</span>
-      <input class="rebal-rate-input" id="rate-st" type="number" value="37" min="0" max="100" step="1" oninput="renderRebalance()">
+      <input class="rebal-rate-input" id="rate-st" type="number" value="36" min="0" max="100" step="1" oninput="renderRebalance()">
       <span style="font-size:10px;color:var(--color-text-tertiary)">%</span>
       <span style="width:1px;height:20px;background:var(--color-border-secondary);margin:0 4px"></span>
       <span class="rebal-control-label">Long-term rate</span>
-      <input class="rebal-rate-input" id="rate-lt" type="number" value="20" min="0" max="100" step="1" oninput="renderRebalance()">
+      <input class="rebal-rate-input" id="rate-lt" type="number" value="27" min="0" max="100" step="1" oninput="renderRebalance()">
       <span style="font-size:10px;color:var(--color-text-tertiary)">%</span>
-      <span style="font-size:10px;color:var(--color-text-tertiary);margin-left:8px">Adjust to match your bracket</span>
+      <span style="font-size:10px;color:var(--color-text-tertiary);margin-left:8px">Defaults: Oregon resident (24% fed + 9.9% OR + NIIT). Adjust to match your bracket.</span>
     </div>
     <div class="rebal-table-wrap" id="rebal-table-wrap">
       <table class="rebal-table">
@@ -3632,6 +3635,91 @@ function renderTrends() {
 }
 
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Staleness helpers — used by Theme Universe, Refresh Prices, SPX, and any future surface
+// where we need to communicate "how old is this data?"
+// ─────────────────────────────────────────────
+
+// Format a single timestamp as "Xm/Xh/Xd ago". Handles null/invalid.
+// Rolls minutes < 60, hours < 24, then days.
+function fmtTimeAgo(isoTimestamp) {
+  if (!isoTimestamp) return null;
+  const t = new Date(isoTimestamp).getTime();
+  if (isNaN(t)) return null;
+  const ms = Date.now() - t;
+  if (ms < 60000) return 'just now';
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(ms / 3600000);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(ms / 86400000);
+  return `${days}d ago`;
+}
+
+// Color-code by age: <24h gray (fresh), 1-7d yellow (consider refresh), >7d red (stale).
+// Returns CSS color string. Used alongside fmtTimeAgo in displayed labels.
+function staleColorFor(isoTimestamp) {
+  if (!isoTimestamp) return 'var(--color-text-tertiary)';
+  const t = new Date(isoTimestamp).getTime();
+  if (isNaN(t)) return 'var(--color-text-tertiary)';
+  const ms = Date.now() - t;
+  if (ms < 86400000) return 'var(--color-text-tertiary)'; // <24h: muted gray
+  if (ms < 7 * 86400000) return '#fbbf24';                // 1-7d: yellow warning
+  return 'var(--color-text-danger)';                       // >7d: red, cache TTL hit
+}
+
+// Theme Universe: extract oldest + newest fetch timestamps across all cached entries.
+// Returns { oldest, newest } as ISO strings, or { oldest: null, newest: null } if no data.
+function themeUniverseFetchRange() {
+  let oldest = null, newest = null;
+  Object.values(themeUniverseHistory || {}).forEach(windows => {
+    Object.values(windows || {}).forEach(entry => {
+      if (!entry || !entry.fetched) return;
+      const t = new Date(entry.fetched).getTime();
+      if (isNaN(t)) return;
+      if (oldest === null || t < new Date(oldest).getTime()) oldest = entry.fetched;
+      if (newest === null || t > new Date(newest).getTime()) newest = entry.fetched;
+    });
+  });
+  return { oldest, newest };
+}
+
+// Populate persistent staleness tags next to data-fetch buttons in the top bar.
+// Refresh Prices → most recent priceFetchedAt across open positions
+// Get Benchmarks → benchmarkPricesDate
+// SPX → spxLiveDate
+// Each tag shows "Last: Xh ago" with color-coded freshness.
+function renderStaleTags() {
+  // Most recent open-position price fetch
+  let mostRecentPosFetch = null;
+  positions.forEach(p => {
+    if (p.closed || !p.priceFetchedAt) return;
+    const t = new Date(p.priceFetchedAt).getTime();
+    if (isNaN(t)) return;
+    if (mostRecentPosFetch === null || t > new Date(mostRecentPosFetch).getTime()) {
+      mostRecentPosFetch = p.priceFetchedAt;
+    }
+  });
+
+  const setTag = (id, isoTimestamp, neverLabel) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!isoTimestamp) {
+      el.textContent = neverLabel || '';
+      el.style.color = 'var(--color-text-tertiary)';
+      return;
+    }
+    const ago = fmtTimeAgo(isoTimestamp);
+    el.textContent = ago ? `Last: ${ago}` : '';
+    el.style.color = staleColorFor(isoTimestamp);
+  };
+
+  setTag('refresh-prices-stale', mostRecentPosFetch, 'Never');
+  setTag('get-benchmarks-stale', benchmarkPricesDate, 'Never');
+  setTag('spx-stale', spxLiveDate, 'Manual entry');
+}
+
+// ─────────────────────────────────────────────
 // Stale Prices Banner — surfaces when position prices are older than benchmark prices.
 // Trust signal, not a market signal: tells you the alpha numbers may be unreliable.
 // ─────────────────────────────────────────────
@@ -4523,8 +4611,10 @@ const TYPE_LABELS = {
 function renderTaxExposure() {
   const today = new Date();
   const taxYear = today.getFullYear();
-  const stRate = 0.37;
-  const ltRate = 0.20;
+  // Oregon-calibrated: 36% ST (24% fed + 9.9% OR + NIIT), 27% LT (15% fed + 9.9% OR + NIIT).
+  // Single source of truth: TAX_RATE_ST/LT constants. Track Record + Rebalance + this surface all agree.
+  const stRate = TAX_RATE_ST;
+  const ltRate = TAX_RATE_LT;
 
   let ltGains = 0, stGains = 0, harvested = 0;
 
@@ -4558,8 +4648,8 @@ function renderTaxExposure() {
 
   setEl('tax-lt-gains', fmtDollarWhole(ltGains));
   setEl('tax-st-gains', fmtDollarWhole(stGains));
-  setEl('tax-lt-est', `Est. tax: ${fmtDollarWhole(ltTax)} @ 20%`);
-  setEl('tax-st-est', `Est. tax: ${fmtDollarWhole(stTax)} @ 37%`);
+  setEl('tax-lt-est', `Est. tax: ${fmtDollarWhole(ltTax)} @ ${(ltRate * 100).toFixed(0)}%`);
+  setEl('tax-st-est', `Est. tax: ${fmtDollarWhole(stTax)} @ ${(stRate * 100).toFixed(0)}%`);
   setEl('tax-harvested', fmtDollarWhole(harvested));
   setEl('tax-sheltered', fmtDollarWhole(netTax));
 
@@ -5006,8 +5096,9 @@ function renderSimResult() {
   // Build sequential state
   const today = new Date();
   const taxYear = today.getFullYear();
-  const stRate = (parseFloat(document.getElementById('rate-st')?.value) || 37) / 100;
-  const ltRate = (parseFloat(document.getElementById('rate-lt')?.value) || 20) / 100;
+  // Fallbacks match Oregon-calibrated TAX_RATE_ST/LT constants (36/27) for consistency with Track Record.
+  const stRate = (parseFloat(document.getElementById('rate-st')?.value) || (TAX_RATE_ST * 100)) / 100;
+  const ltRate = (parseFloat(document.getElementById('rate-lt')?.value) || (TAX_RATE_LT * 100)) / 100;
 
   // Initial state
   const open = positions.filter(p => !p.closed && p.ticker && p.theme);
@@ -5693,7 +5784,9 @@ function _renderCardOverlay(type) {
     }
 
   } else if (type === 'tax') {
-    const stRate = 0.37; const ltRate = 0.20;
+    // Use Oregon-calibrated TAX_RATE_ST/LT constants — match Track Record + Rebalance for consistency.
+    const stRate = TAX_RATE_ST;
+    const ltRate = TAX_RATE_LT;
     let ltGains=0, stGains=0, harvested=0;
     const taxPositions = [];
     positions.filter(p=>p.closed&&p.ticker&&p.sellDate).forEach(p=>{
@@ -5712,8 +5805,8 @@ function _renderCardOverlay(type) {
     html = '<div style="font-size:13px;font-weight:700;color:var(--color-text-primary);margin-bottom:4px">' + taxYear + ' Tax Year</div>';
     html += '<div style="font-size:9px;color:var(--color-text-tertiary);margin-bottom:14px">Taxable accounts only · IRA excluded</div>';
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">';
-    [['LT Gains Realised','var(--color-text-danger)',ltGains,'Est. tax '+fmtDollarWhole(ltGains*ltRate)+' @ 20%'],
-     ['ST Gains Realised','var(--color-text-danger)',stGains,'Est. tax '+fmtDollarWhole(stGains*stRate)+' @ 37%'],
+    [['LT Gains Realised','var(--color-text-danger)',ltGains,'Est. tax '+fmtDollarWhole(ltGains*ltRate)+' @ '+(ltRate*100).toFixed(0)+'%'],
+     ['ST Gains Realised','var(--color-text-danger)',stGains,'Est. tax '+fmtDollarWhole(stGains*stRate)+' @ '+(stRate*100).toFixed(0)+'%'],
      ['Losses Harvested','var(--color-text-success)',harvested,'Offsets gains dollar for dollar'],
      ['Net Tax Bill',netTax>0?'var(--color-text-danger)':'var(--color-text-success)',netTax,'After harvest offset']
     ].forEach(([label,color,val,desc])=>{
@@ -6960,6 +7053,18 @@ function renderThemeUniverse() {
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
       <button class="btn btn-sm" onclick="backfillThemeUniverse()" style="font-size:10px;padding:5px 12px">⟳ Backfill Theme Universe</button>
       <span id="theme-universe-backfill-status" style="font-size:10px;color:var(--color-text-tertiary)"></span>
+      ${(() => {
+        const range = themeUniverseFetchRange();
+        if (!range.newest) return '';
+        const newestStr = fmtTimeAgo(range.newest);
+        const oldestStr = fmtTimeAgo(range.oldest);
+        const newestColor = staleColorFor(range.newest);
+        const oldestColor = staleColorFor(range.oldest);
+        if (newestStr === oldestStr) {
+          return `<span style="font-size:10px;color:${newestColor}" title="All cached entries fetched at the same time">Last refresh: ${newestStr}</span>`;
+        }
+        return `<span style="font-size:10px;color:${newestColor}">Last refresh: ${newestStr}</span> <span style="font-size:10px;color:${oldestColor}" title="Some entries are older than the most recent refresh — re-click backfill to update">· oldest data: ${oldestStr}</span>`;
+      })()}
     </div>
     <div class="rebal-table-wrap">
       <table class="rebal-table">
@@ -7182,8 +7287,9 @@ function renderRebalance() {
   const tbody = document.getElementById('rebal-tbody');
   if (!tbody) return;
 
-  const stRate = (parseFloat(document.getElementById('rate-st')?.value) || 37) / 100;
-  const ltRate = (parseFloat(document.getElementById('rate-lt')?.value) || 20) / 100;
+  // Fallbacks match Oregon-calibrated TAX_RATE_ST/LT constants for consistency with Track Record.
+  const stRate = (parseFloat(document.getElementById('rate-st')?.value) || (TAX_RATE_ST * 100)) / 100;
+  const ltRate = (parseFloat(document.getElementById('rate-lt')?.value) || (TAX_RATE_LT * 100)) / 100;
   const today = new Date();
 
   // Build per-position data
@@ -7467,6 +7573,7 @@ function renderAll() {
   renderCapitalFlow();
   renderTaxExposure();
   renderStaleBanner();
+  renderStaleTags();
   updateBackfillButton();
   updateIndustryAlphaToggleVisual();
   syncFixedScrollbar();
