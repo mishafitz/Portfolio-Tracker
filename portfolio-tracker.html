@@ -696,6 +696,7 @@
     <button class="tab-btn" onclick="switchTab('rebalance')">Rebalance &amp; Tax</button>
     <button class="tab-btn" onclick="switchTab('postsell')">Post-Sell Analysis</button>
     <button class="tab-btn" onclick="switchTab('trends')">Trends</button>
+    <button class="tab-btn" onclick="switchTab('themes')">Themes</button>
   </div>
 
   <!-- Dashboard Tab -->
@@ -732,6 +733,10 @@
       <div class="analytics-card" id="add-watch-card" onclick="showCardOverlay('add')" style="cursor:pointer">
         <div class="analytics-card-title">Top 3 Add Candidates — Beating Both Lenses, Past Soak</div>
         <div id="add-watch-content"></div>
+      </div>
+      <div class="analytics-card" id="theme-universe-dash-card" onclick="switchTab('themes')" style="cursor:pointer">
+        <div class="analytics-card-title">Theme Universe — Zero-Exposure Themes by 1Y</div>
+        <div id="theme-universe-dash-content"></div>
       </div>
     </div>
 
@@ -1114,6 +1119,12 @@
     <div id="trends-list"></div>
   </div><!-- end tab-trends -->
 
+  <!-- Themes Tab -->
+  <div class="tab-panel" id="tab-themes">
+    <div class="section-heading">Theme Universe</div>
+    <div id="theme-universe-tab-content"></div>
+  </div><!-- end tab-themes -->
+
 </div>
 
 <div id="save-note">Saved ✓</div>
@@ -1381,6 +1392,13 @@ let benchmarkPricesDate = null; // ISO timestamp of last benchmark fetch
 let trackRecordMatureOnly = false; // toggle: filter Track Record cards to mature positions only
 let industryAlphaMatureOnly = false; // toggle: filter Industry Intelligence/Spotlight theme alpha to mature open positions only
 
+// Theme Universe historical price cache.
+// Shape: { TICKER: { ytd: 412.50, '1y': 380.21, '5y': 215.40, '10y': 145.20, fetched: ISO_string } }
+// Populated by the "Backfill Theme Universe" button in the Themes tab. Reused across renders.
+// Today's price for these tickers comes from the regular benchmarkPrices object — kept separate
+// so daily benchmark refresh doesn't invalidate historical anchors.
+let themeUniverseHistory = {};
+
 // Tax rates for after-tax adjustments (Oregon resident, mid-six-figures household).
 // Conservative side: slightly overstates drag if your real income is lower (errs toward making
 // after-tax alpha look worse than reality, which is the safer error direction).
@@ -1420,7 +1438,7 @@ async function savePositions() {
     localStorage.setItem('portfolio-positions-closed', JSON.stringify({ positions: closedPos }));
     localStorage.setItem('portfolio-sp-data', JSON.stringify({ spLots, spCurrentPrice }));
     localStorage.setItem('portfolio-ledger', JSON.stringify({ cashLedger }));
-    localStorage.setItem('portfolio-snapshots-v1', JSON.stringify({ snapshots, benchmarkPrices, benchmarkPricesDate, trackRecordMatureOnly, industryAlphaMatureOnly }));
+    localStorage.setItem('portfolio-snapshots-v1', JSON.stringify({ snapshots, benchmarkPrices, benchmarkPricesDate, trackRecordMatureOnly, industryAlphaMatureOnly, themeUniverseHistory }));
     flashSave();
   } catch(e) {
     console.warn('Save failed', e.message);
@@ -1491,6 +1509,7 @@ async function loadPositions() {
       if (snapParsed.benchmarkPricesDate) benchmarkPricesDate = snapParsed.benchmarkPricesDate;
       if (typeof snapParsed.trackRecordMatureOnly === 'boolean') trackRecordMatureOnly = snapParsed.trackRecordMatureOnly;
       if (typeof snapParsed.industryAlphaMatureOnly === 'boolean') industryAlphaMatureOnly = snapParsed.industryAlphaMatureOnly;
+      if (snapParsed.themeUniverseHistory && typeof snapParsed.themeUniverseHistory === 'object') themeUniverseHistory = snapParsed.themeUniverseHistory;
     }
   } catch(e) { /* no snapshots yet */ }
 
@@ -2887,6 +2906,7 @@ function switchTab(name) {
   if (name === 'rebalance') { renderSleevePerformance(); renderThemeIntel(); renderRebalance(); }
   if (name === 'postsell') renderPostSell();
   if (name === 'trends') renderTrends();
+  if (name === 'themes') renderThemeUniverse();
   if (name === 'dashboard') syncFixedScrollbar();
 }
 
@@ -2909,8 +2929,10 @@ function setPriceToday(id, value) {
 function getAllBenchmarkTickers() {
   const themes = Object.values(BENCHMARKS.themes).filter(t => t);
   const sleeves = Object.values(BENCHMARKS.sleeves).filter(t => t && t !== 'SPX');
+  // Theme Universe additions — ETFs we don't have positions in but track for awareness surface
+  const universeAdditions = THEME_UNIVERSE.missing.map(t => t.ticker);
   // SPX is not a fetchable ETF on Polygon free tier — handled separately via spxLive.
-  return [...new Set([...themes, ...sleeves])];
+  return [...new Set([...themes, ...sleeves, ...universeAdditions])];
 }
 
 async function getBenchmarkPrices() {
@@ -6604,6 +6626,57 @@ const BENCHMARKS = {
   }
 };
 
+// Theme Universe — comprehensive set of themes for awareness surface.
+// `existing` themes are ones you have positions in (or could). `missing` are themes you don't
+// currently track but might want awareness of — informational only, not recommendations.
+// Order: existing themes preserve order from BENCHMARKS.themes; missing themes are alphabetical.
+//
+// Used by the Themes tab + dashboard tile to show:
+//   - Which themes exist in the universe
+//   - Recent performance of each theme's benchmark ETF
+//   - Your current $ exposure (or zero) per theme
+//
+// IMPORTANT: this surface is informational. Do not add scoring, ranking, or buy-suggestion logic.
+// The whole point is to address "I don't know what I don't know" without prescribing action.
+const THEME_UNIVERSE = {
+  existing: [
+    { name: 'Big Tech',          ticker: 'QQQ' },
+    { name: 'Semiconductors',    ticker: 'SMH' },
+    { name: 'AI Infrastructure', ticker: 'SMH' },
+    { name: 'Cybersecurity',     ticker: 'CIBR' },
+    { name: 'Financials',        ticker: 'XLF' },
+    { name: 'Energy & Grid',     ticker: 'XLE' },
+    { name: 'Commodities',       ticker: 'GLD' },
+    { name: 'Consumer',          ticker: 'XLY' },
+    { name: 'Space & Defense',   ticker: 'ITA' }
+  ],
+  missing: [
+    { name: 'Bonds / Treasuries',    ticker: 'AGG' },
+    { name: 'Consumer Staples',      ticker: 'XLP' },
+    { name: 'Emerging Markets',      ticker: 'VWO' },
+    { name: 'Healthcare',            ticker: 'XLV' },
+    { name: 'International Developed', ticker: 'VEA' },
+    { name: 'Real Estate / REITs',   ticker: 'VNQ' },
+    { name: 'Small Caps',            ticker: 'IWM' },
+    { name: 'Utilities',             ticker: 'XLU' }
+  ]
+};
+
+// Convenience: flat list of all theme universe entries
+function themeUniverseAll() {
+  return [...THEME_UNIVERSE.existing, ...THEME_UNIVERSE.missing];
+}
+
+// Convenience: list of all benchmark tickers in universe (for backfill)
+function themeUniverseTickers() {
+  const seen = new Set();
+  return themeUniverseAll().filter(t => {
+    if (seen.has(t.ticker)) return false;
+    seen.add(t.ticker);
+    return true;
+  }).map(t => t.ticker);
+}
+
 function getThemeBenchmark(themeName) {
   if (!themeName) return undefined;
   return BENCHMARKS.themes[themeName];
@@ -6612,6 +6685,233 @@ function getThemeBenchmark(themeName) {
 function getSleeveBenchmark(sleeveName) {
   if (!sleeveName) return undefined;
   return BENCHMARKS.sleeves[sleeveName];
+}
+
+// ─────────────────────────────────────────────
+// Theme Universe — awareness surface, not recommendation
+// ─────────────────────────────────────────────
+
+// Compute the set of date strings (YYYY-MM-DD) we need historical prices for.
+// Used by backfillThemeUniverse and performance computation.
+// Note: approximate dates — the Polygon /v1/open-close endpoint will return null on
+// non-trading days (weekends, holidays). The backfill walks back day-by-day until a
+// trading day is found, so the actual fetch dates may differ slightly from these targets.
+function getThemeUniverseTargetDates() {
+  const now = new Date();
+  const ytd = new Date(now.getFullYear(), 0, 2); // Jan 2 — first likely trading day
+  const oneY = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+  const fiveY = new Date(now.getFullYear() - 5, now.getMonth(), now.getDate());
+  const tenY = new Date(now.getFullYear() - 10, now.getMonth(), now.getDate());
+  const fmt = d => d.toISOString().slice(0, 10);
+  return { ytd: fmt(ytd), '1y': fmt(oneY), '5y': fmt(fiveY), '10y': fmt(tenY) };
+}
+
+// Walk back from target date until a trading day with a price is found.
+// Caps at 5 days back — beyond that, treat as missing data.
+async function fetchHistoricalNearby(ticker, targetDate) {
+  const target = new Date(targetDate + 'T00:00:00Z');
+  for (let offset = 0; offset < 5; offset++) {
+    const tryDate = new Date(target);
+    tryDate.setDate(tryDate.getDate() - offset);
+    const dateStr = tryDate.toISOString().slice(0, 10);
+    const result = await fetchHistoricalBenchmarkPrice(ticker, dateStr);
+    if (result.price !== null) return { price: result.price, dateUsed: dateStr };
+    // Brief pause between rate-limited Polygon calls
+    await new Promise(r => setTimeout(r, 13000));
+  }
+  return { price: null, dateUsed: null };
+}
+
+// Backfill historical prices for all theme universe tickers across YTD/1Y/5Y/10Y windows.
+// Reuses existing fetchHistoricalBenchmarkPrice. Polygon free tier: 5 calls/min, so 32 calls
+// for 8 new tickers × 4 windows = ~7 minutes total. Walks back from target date if a non-trading
+// day is hit. Defensive against rate limits with 13s pause between calls.
+async function backfillThemeUniverse() {
+  const status = document.getElementById('theme-universe-backfill-status');
+  if (!polygonKey) {
+    if (status) { status.textContent = 'Need Polygon API key first'; status.style.color = '#fbbf24'; }
+    return;
+  }
+
+  const tickers = themeUniverseTickers();
+  const dates = getThemeUniverseTargetDates();
+  const windows = ['ytd', '1y', '5y', '10y'];
+
+  let completed = 0;
+  const total = tickers.length * windows.length;
+
+  for (const ticker of tickers) {
+    if (!themeUniverseHistory[ticker]) themeUniverseHistory[ticker] = {};
+    for (const win of windows) {
+      if (status) { status.textContent = `Fetching ${ticker} ${win.toUpperCase()}... (${completed + 1}/${total})`; status.style.color = 'var(--color-text-tertiary)'; }
+      // Skip if we already have this window cached recently (within 7 days)
+      const cached = themeUniverseHistory[ticker][win];
+      const cacheAgeOk = cached && cached.fetched && (Date.now() - new Date(cached.fetched).getTime() < 7 * 86400000);
+      if (cacheAgeOk) { completed++; continue; }
+
+      const result = await fetchHistoricalNearby(ticker, dates[win]);
+      if (result.price !== null) {
+        themeUniverseHistory[ticker][win] = {
+          price: result.price,
+          dateUsed: result.dateUsed,
+          fetched: new Date().toISOString()
+        };
+      }
+      completed++;
+      // Rate limit: Polygon free tier is 5/min; 13s between calls is safe.
+      await new Promise(r => setTimeout(r, 13000));
+    }
+  }
+
+  await save();
+  if (status) { status.textContent = `Done — ${completed} of ${total} fetched`; status.style.color = 'var(--color-text-success)'; }
+  renderThemeUniverse();
+  renderThemeUniverseDashTile();
+}
+
+// Compute returns for a theme. Returns object { ytd, '1y', '5y', '10y' } where each is
+// a percentage number or null (if missing data). Uses today's price from benchmarkPrices
+// and historical prices from themeUniverseHistory.
+function computeThemeReturns(ticker) {
+  const today = benchmarkPrices[ticker];
+  const hist = themeUniverseHistory[ticker] || {};
+  const calc = window => {
+    const h = hist[window];
+    if (!today || !h || !h.price) return null;
+    return ((today - h.price) / h.price) * 100;
+  };
+  return { ytd: calc('ytd'), '1y': calc('1y'), '5y': calc('5y'), '10y': calc('10y') };
+}
+
+// Compute current $ exposure for a theme.
+// "Existing" themes use the position list directly. "Missing" themes are zero by definition
+// (since they're not in BENCHMARKS.themes). Returns { dollars, percentOfActive }.
+function computeThemeExposure(themeName) {
+  const open = positions.filter(p => !p.closed && p.ticker);
+  const totalActive = open.reduce((s, p) => s + (calcPos(p).exitValue || 0), 0);
+  const themePositions = open.filter(p => p.theme === themeName);
+  const dollars = themePositions.reduce((s, p) => s + (calcPos(p).exitValue || 0), 0);
+  const pct = totalActive > 0 ? (dollars / totalActive) * 100 : 0;
+  return { dollars, percentOfActive: pct, hasPositions: themePositions.length > 0 };
+}
+
+// Render the full Theme Universe tab.
+function renderThemeUniverse() {
+  const el = document.getElementById('theme-universe-tab-content');
+  if (!el) return;
+
+  const all = themeUniverseAll();
+  const fmtRet = (n) => n === null ? '<span style="color:var(--color-text-tertiary)">—</span>' :
+    `<span style="color:${n >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)'}">${n >= 0 ? '+' : ''}${n.toFixed(1)}%</span>`;
+
+  const rows = all.map(t => {
+    const isExisting = THEME_UNIVERSE.existing.some(e => e.name === t.name);
+    const exposure = computeThemeExposure(t.name);
+    const returns = computeThemeReturns(t.ticker);
+
+    const exposureCell = isExisting && exposure.hasPositions
+      ? `<span style="color:var(--color-text-secondary)">${fmtDollarWhole(exposure.dollars)}</span> <span style="color:var(--color-text-tertiary);font-size:9px">(${exposure.percentOfActive.toFixed(1)}%)</span>`
+      : `<span style="color:var(--color-text-tertiary);font-style:italic">no exposure</span>`;
+
+    const rowOpacity = isExisting ? '' : 'background:var(--color-background-secondary);';
+    return `<tr style="${rowOpacity}">
+      <td><strong>${esc(t.name)}</strong></td>
+      <td><span style="font-size:10px;color:var(--color-text-tertiary)">${t.ticker}</span></td>
+      <td class="r">${fmtRet(returns.ytd)}</td>
+      <td class="r">${fmtRet(returns['1y'])}</td>
+      <td class="r">${fmtRet(returns['5y'])}</td>
+      <td class="r">${fmtRet(returns['10y'])}</td>
+      <td class="r">${exposureCell}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="margin-bottom:14px;padding:10px 14px;background:var(--color-background-secondary);border-left:3px solid var(--color-text-info);border-radius:var(--border-radius-sm);font-size:11px;color:var(--color-text-secondary);line-height:1.55">
+      <span style="font-size:13px;color:var(--color-text-info);margin-right:6px">ⓘ</span>
+      <strong style="color:var(--color-text-primary)">Awareness surface, not recommendation.</strong>
+      Shows performance of theme benchmarks across windows alongside your current exposure. Helps surface "what you don't know you don't know" without prescribing action. Highlighted rows are themes you currently own; unhighlighted rows are theme universe additions for context.
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+      <button class="btn btn-sm" onclick="backfillThemeUniverse()" style="font-size:10px;padding:5px 12px">⟳ Backfill Theme Universe</button>
+      <span id="theme-universe-backfill-status" style="font-size:10px;color:var(--color-text-tertiary)"></span>
+    </div>
+    <div class="rebal-table-wrap">
+      <table class="rebal-table">
+        <thead>
+          <tr>
+            <th>Theme</th>
+            <th>Benchmark</th>
+            <th class="r">YTD</th>
+            <th class="r">1Y</th>
+            <th class="r">5Y</th>
+            <th class="r">10Y</th>
+            <th class="r">Your Exposure</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+// Dashboard tile — zero-exposure themes only, sorted by 1Y performance descending.
+// Shows top 6-8 zero-exposure themes for at-a-glance "what am I missing."
+function renderThemeUniverseDashTile() {
+  const el = document.getElementById('theme-universe-dash-content');
+  if (!el) return;
+
+  const all = themeUniverseAll();
+  // Filter to zero-exposure themes
+  const zeroExposure = all.map(t => {
+    const exposure = computeThemeExposure(t.name);
+    const returns = computeThemeReturns(t.ticker);
+    return { ...t, exposure, returns };
+  }).filter(t => !t.exposure.hasPositions);
+
+  // Sort by 1Y performance descending; null returns sort to bottom
+  zeroExposure.sort((a, b) => {
+    const ar = a.returns['1y'];
+    const br = b.returns['1y'];
+    if (ar === null && br === null) return 0;
+    if (ar === null) return 1;
+    if (br === null) return -1;
+    return br - ar;
+  });
+
+  const top = zeroExposure.slice(0, 8);
+
+  if (top.length === 0) {
+    el.innerHTML = '<div style="color:var(--color-text-tertiary);font-size:11px;padding:8px 0">You have exposure to all themes in the universe. No blind spots.</div>';
+    return;
+  }
+
+  // Check if we have any returns data; if not, prompt to backfill
+  const hasAnyData = top.some(t => t.returns['1y'] !== null);
+  if (!hasAnyData) {
+    el.innerHTML = `<div style="color:var(--color-text-tertiary);font-size:11px;padding:8px 0;line-height:1.5">No benchmark data yet. Click <strong>Backfill Theme Universe</strong> in the Themes tab to populate.</div>`;
+    return;
+  }
+
+  const fmtRet = (n) => n === null ? '<span style="color:var(--color-text-tertiary)">—</span>' :
+    `<span style="color:${n >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)'};font-weight:600">${n >= 0 ? '+' : ''}${n.toFixed(1)}%</span>`;
+
+  const header = `<div style="display:flex;justify-content:space-between;align-items:center;padding:0 0 6px;border-bottom:1px solid var(--color-border-tertiary);margin-bottom:4px">
+      <span style="font-size:9px;color:var(--color-text-tertiary);width:140px;flex-shrink:0">Theme</span>
+      <span style="font-size:9px;color:var(--color-text-tertiary);width:38px;flex-shrink:0">ETF</span>
+      <span style="font-size:9px;color:var(--color-text-tertiary);width:50px;text-align:right;flex-shrink:0">YTD</span>
+      <span style="font-size:9px;color:var(--color-text-tertiary);width:50px;text-align:right;flex-shrink:0">1Y</span>
+      <span style="font-size:9px;color:var(--color-text-tertiary);width:50px;text-align:right;flex-shrink:0">5Y</span>
+    </div>`;
+
+  const rows = top.map(t => `<div class="bw-row" style="justify-content:space-between;align-items:center">
+      <span style="font-size:11px;color:var(--color-text-primary);width:140px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.name)}</span>
+      <span style="font-size:9px;color:var(--color-text-tertiary);width:38px;flex-shrink:0">${t.ticker}</span>
+      <span style="font-size:11px;width:50px;text-align:right;flex-shrink:0">${fmtRet(t.returns.ytd)}</span>
+      <span style="font-size:11px;width:50px;text-align:right;flex-shrink:0">${fmtRet(t.returns['1y'])}</span>
+      <span style="font-size:11px;width:50px;text-align:right;flex-shrink:0">${fmtRet(t.returns['5y'])}</span>
+    </div>`).join('');
+
+  el.innerHTML = header + rows;
 }
 
 // Returns HTML for a benchmark display: ticker + price + freshness, or "no benchmark" placeholder.
@@ -7030,6 +7330,7 @@ function renderAll() {
   renderSummary('closed-summary', closed, false);
   renderTrimWatch();
   renderAddWatch();
+  renderThemeUniverseDashTile();
   renderAccountBreakdown();
   renderDashboardThemeSpotlight();
   renderStackedBar();
@@ -7145,6 +7446,7 @@ function updateSummaries() {
   renderSummary('closed-summary', closed, false);
   renderTrimWatch();
   renderAddWatch();
+  renderThemeUniverseDashTile();
   renderAccountBreakdown();
   renderDashboardThemeSpotlight();
   renderStackedBar();
