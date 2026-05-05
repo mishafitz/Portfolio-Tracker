@@ -6759,7 +6759,10 @@ async function backfillThemeUniverse() {
   // Existing themes are already tracked by other systems; no need to fetch historical anchors here.
   const tickers = THEME_UNIVERSE.missing.map(t => t.ticker);
   const dates = getThemeUniverseTargetDates();
-  const windows = ['ytd', '1y', '5y', '10y'];
+  // Polygon free tier returns 403 for dates older than ~2 years. Only fetch YTD and 1Y windows.
+  // 5Y and 10Y stay defined in target dates and display columns but are never fetched on free tier.
+  // To enable 5Y/10Y, upgrade to Polygon Stocks Starter ($30/mo) and add them back here.
+  const windows = ['ytd', '1y'];
 
   // Pre-flight: count how many fetches are actually needed (skip cached recent fetches)
   const needed = [];
@@ -6866,6 +6869,10 @@ function renderThemeUniverse() {
   // not arbitrary YTD/1Y/5Y/10Y windows). Show a non-alarming "—" with explanatory tooltip.
   const notTrackedCell = `<span style="color:var(--color-text-tertiary);opacity:0.4" title="Historical windows not tracked for themes you currently own — your existing positions use position-specific theme alpha math instead. See Industry Reference / Industry Spotlight for those.">·</span>`;
 
+  // 5Y / 10Y cells permanently show "—" because Polygon free tier returns 403 for dates >2 years back.
+  // To enable, upgrade to Polygon Stocks Starter and re-add those windows to the backfill list.
+  const longWindowCell = `<span style="color:var(--color-text-tertiary);opacity:0.4" title="5Y and 10Y windows require Polygon Stocks Starter ($30/mo) — free tier rejects dates older than 2 years.">—</span>`;
+
   const rows = all.map(t => {
     const isExisting = THEME_UNIVERSE.existing.some(e => e.name === t.name);
     const exposure = computeThemeExposure(t.name);
@@ -6875,12 +6882,12 @@ function renderThemeUniverse() {
       ? `<span style="color:var(--color-text-secondary)">${fmtDollarWhole(exposure.dollars)}</span> <span style="color:var(--color-text-tertiary);font-size:9px">(${exposure.percentOfActive.toFixed(1)}%)</span>`
       : `<span style="color:var(--color-text-tertiary);font-style:italic">no exposure</span>`;
 
-    // For existing themes, show "·" muted dots in windowed columns (different from "—" which means
-    // "we tried to fetch this and it failed"). For missing themes, show real returns or "—" if absent.
+    // For existing themes, show "·" muted dots (not tracked by design).
+    // For missing themes, show real returns for YTD/1Y; permanent "—" for 5Y/10Y (free tier limit).
     const ytdCell = isExisting ? notTrackedCell : fmtRet(returns.ytd);
     const oneyCell = isExisting ? notTrackedCell : fmtRet(returns['1y']);
-    const fiveyCell = isExisting ? notTrackedCell : fmtRet(returns['5y']);
-    const tenyCell = isExisting ? notTrackedCell : fmtRet(returns['10y']);
+    const fiveyCell = isExisting ? notTrackedCell : longWindowCell;
+    const tenyCell = isExisting ? notTrackedCell : longWindowCell;
 
     const rowOpacity = isExisting ? '' : 'background:var(--color-background-secondary);';
     return `<tr style="${rowOpacity}">
@@ -6899,6 +6906,7 @@ function renderThemeUniverse() {
       <span style="font-size:13px;color:var(--color-text-info);margin-right:6px">ⓘ</span>
       <strong style="color:var(--color-text-primary)">Awareness surface, not recommendation.</strong>
       Shows performance of theme benchmarks across windows alongside your current exposure. Helps surface "what you don't know you don't know" without prescribing action. Highlighted rows are themes you currently own; unhighlighted rows are theme universe additions for context.
+      <div style="margin-top:6px;font-size:10px;color:var(--color-text-tertiary);font-style:italic">YTD and 1Y are populated via Polygon free tier. 5Y and 10Y require Polygon Stocks Starter ($30/mo) — free tier rejects dates older than 2 years.</div>
     </div>
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
       <button class="btn btn-sm" onclick="backfillThemeUniverse()" style="font-size:10px;padding:5px 12px">⟳ Backfill Theme Universe</button>
@@ -6965,19 +6973,17 @@ function renderThemeUniverseDashTile() {
     `<span style="color:${n >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)'};font-weight:600">${n >= 0 ? '+' : ''}${n.toFixed(1)}%</span>`;
 
   const header = `<div style="display:flex;justify-content:space-between;align-items:center;padding:0 0 6px;border-bottom:1px solid var(--color-border-tertiary);margin-bottom:4px">
-      <span style="font-size:9px;color:var(--color-text-tertiary);width:140px;flex-shrink:0">Theme</span>
-      <span style="font-size:9px;color:var(--color-text-tertiary);width:38px;flex-shrink:0">ETF</span>
-      <span style="font-size:9px;color:var(--color-text-tertiary);width:50px;text-align:right;flex-shrink:0">YTD</span>
-      <span style="font-size:9px;color:var(--color-text-tertiary);width:50px;text-align:right;flex-shrink:0">1Y</span>
-      <span style="font-size:9px;color:var(--color-text-tertiary);width:50px;text-align:right;flex-shrink:0">5Y</span>
+      <span style="font-size:9px;color:var(--color-text-tertiary);width:170px;flex-shrink:0">Theme</span>
+      <span style="font-size:9px;color:var(--color-text-tertiary);width:42px;flex-shrink:0">ETF</span>
+      <span style="font-size:9px;color:var(--color-text-tertiary);width:60px;text-align:right;flex-shrink:0">YTD</span>
+      <span style="font-size:9px;color:var(--color-text-tertiary);width:60px;text-align:right;flex-shrink:0">1Y</span>
     </div>`;
 
   const rows = top.map(t => `<div class="bw-row" style="justify-content:space-between;align-items:center">
-      <span style="font-size:11px;color:var(--color-text-primary);width:140px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.name)}</span>
-      <span style="font-size:9px;color:var(--color-text-tertiary);width:38px;flex-shrink:0">${t.ticker}</span>
-      <span style="font-size:11px;width:50px;text-align:right;flex-shrink:0">${fmtRet(t.returns.ytd)}</span>
-      <span style="font-size:11px;width:50px;text-align:right;flex-shrink:0">${fmtRet(t.returns['1y'])}</span>
-      <span style="font-size:11px;width:50px;text-align:right;flex-shrink:0">${fmtRet(t.returns['5y'])}</span>
+      <span style="font-size:11px;color:var(--color-text-primary);width:170px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.name)}</span>
+      <span style="font-size:9px;color:var(--color-text-tertiary);width:42px;flex-shrink:0">${t.ticker}</span>
+      <span style="font-size:11px;width:60px;text-align:right;flex-shrink:0">${fmtRet(t.returns.ytd)}</span>
+      <span style="font-size:11px;width:60px;text-align:right;flex-shrink:0">${fmtRet(t.returns['1y'])}</span>
     </div>`).join('');
 
   el.innerHTML = header + rows;
