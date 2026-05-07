@@ -740,6 +740,10 @@
         <div class="analytics-card-title">Theme Universe — Zero-Exposure Themes by 1Y</div>
         <div id="theme-universe-dash-content"></div>
       </div>
+      <div class="analytics-card" id="capital-deployed-card" onclick="showCardOverlay('capital-deployed')" style="cursor:pointer">
+        <div class="analytics-card-title">Capital Deployed — Money In Over Time</div>
+        <div id="capital-deployed-content"></div>
+      </div>
     </div>
 
 
@@ -1196,6 +1200,39 @@
     <div class="modal-actions">
       <button class="btn" onclick="skipCashModal()">Skip — Don't track</button>
       <button class="btn btn-primary" onclick="confirmCashModal()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add VOO Lot Modal -->
+<div class="modal-overlay hidden" id="add-voo-lot-modal">
+  <div class="modal">
+    <div class="modal-title">Add VOO Lot</div>
+    <div class="modal-subtitle">Appends a single VOO purchase. Existing lots are not affected.</div>
+    <div class="modal-field">
+      <label class="modal-label">Buy date</label>
+      <input class="modal-input" id="add-voo-date" type="date" style="width:170px">
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Shares</label>
+      <input class="modal-input" id="add-voo-shares" type="number" min="0" step="0.0001" placeholder="e.g. 5" style="width:140px">
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Price paid per share</label>
+      <input class="modal-input" id="add-voo-price" type="number" min="0" step="0.01" placeholder="e.g. 651.30" style="width:140px">
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Account</label>
+      <select class="modal-select" id="add-voo-account" style="width:140px">
+        <option value="Taxable">Taxable</option>
+        <option value="IRA">IRA</option>
+      </select>
+    </div>
+    <div id="add-voo-preview" style="font-size:10px;color:var(--color-text-tertiary);margin-top:6px"></div>
+    <div id="add-voo-error" style="font-size:10px;color:var(--color-text-danger);margin-top:6px;display:none"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeAddVooLotModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmAddVooLot()">Add Lot</button>
     </div>
   </div>
 </div>
@@ -4475,6 +4512,162 @@ function clearSpLots() {
   scheduleSave();
 }
 
+// ─────────────────────────────────────────────
+// Add VOO Lot — single-lot append-only entry
+// Existing lots are never modified or removed by this path.
+// When editIndex is passed (>= 0), the modal opens in edit mode and replaces
+// the lot at that index in spLots on confirm.
+// ─────────────────────────────────────────────
+let _vooEditIndex = -1; // -1 = add mode, >= 0 = edit mode
+
+function openAddVooLotModal(editIndex) {
+  const modal = document.getElementById('add-voo-lot-modal');
+  if (!modal) return;
+
+  _vooEditIndex = (typeof editIndex === 'number' && editIndex >= 0) ? editIndex : -1;
+  const isEdit = _vooEditIndex >= 0;
+  const editing = isEdit ? spLots[_vooEditIndex] : null;
+
+  // Title and primary-button label change based on mode
+  const titleEl = document.querySelector('#add-voo-lot-modal .modal-title');
+  const subtitleEl = document.querySelector('#add-voo-lot-modal .modal-subtitle');
+  const primaryBtn = document.querySelector('#add-voo-lot-modal .modal-actions .btn-primary');
+  if (titleEl) titleEl.textContent = isEdit ? 'Edit VOO Lot' : 'Add VOO Lot';
+  if (subtitleEl) subtitleEl.textContent = isEdit
+    ? 'Updates this lot in place. Other lots are not affected.'
+    : 'Appends a single VOO purchase. Existing lots are not affected.';
+  if (primaryBtn) primaryBtn.textContent = isEdit ? 'Save Changes' : 'Add Lot';
+
+  // Default values: edit mode → existing lot; add mode → today + most-recent account
+  let defaultDate, defaultShares, defaultPrice, defaultAccount;
+  if (isEdit && editing) {
+    defaultDate = editing.date;
+    defaultShares = editing.shares;
+    defaultPrice = editing.pricePaid;
+    defaultAccount = editing.account || 'Taxable';
+  } else {
+    const t = new Date();
+    const yyyy = t.getFullYear();
+    const mm = String(t.getMonth() + 1).padStart(2, '0');
+    const dd = String(t.getDate()).padStart(2, '0');
+    defaultDate = `${yyyy}-${mm}-${dd}`;
+    defaultShares = '';
+    defaultPrice = '';
+    // Smart account default: most recent lot's account, fallback Taxable
+    defaultAccount = 'Taxable';
+    if (spLots.length > 0) {
+      const mostRecent = [...spLots].sort((a, b) => b.date.localeCompare(a.date))[0];
+      if (mostRecent && mostRecent.account) defaultAccount = mostRecent.account;
+    }
+  }
+
+  document.getElementById('add-voo-date').value = defaultDate;
+  document.getElementById('add-voo-shares').value = defaultShares;
+  document.getElementById('add-voo-price').value = defaultPrice;
+  document.getElementById('add-voo-account').value = defaultAccount;
+  document.getElementById('add-voo-preview').textContent = '';
+  document.getElementById('add-voo-error').style.display = 'none';
+  modal.classList.remove('hidden');
+
+  // Live preview of total cost
+  const update = () => {
+    const sh = parseFloat(document.getElementById('add-voo-shares').value);
+    const pr = parseFloat(document.getElementById('add-voo-price').value);
+    const preview = document.getElementById('add-voo-preview');
+    if (sh > 0 && pr > 0) {
+      preview.textContent = `Total cost: ${fmtDollar(sh * pr)}`;
+    } else {
+      preview.textContent = '';
+    }
+  };
+  document.getElementById('add-voo-shares').oninput = update;
+  document.getElementById('add-voo-price').oninput = update;
+  update(); // populate preview if editing
+}
+
+function closeAddVooLotModal() {
+  const modal = document.getElementById('add-voo-lot-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function confirmAddVooLot() {
+  const dateStr = document.getElementById('add-voo-date').value;
+  const sharesStr = document.getElementById('add-voo-shares').value;
+  const priceStr = document.getElementById('add-voo-price').value;
+  const account = document.getElementById('add-voo-account').value;
+  const errEl = document.getElementById('add-voo-error');
+
+  const showErr = (msg) => { errEl.textContent = msg; errEl.style.display = 'block'; };
+
+  // Validate
+  if (!dateStr) return showErr('Pick a buy date.');
+  // Date sanity: not in the future, not before 2000
+  const buy = new Date(dateStr + 'T00:00:00');
+  const today = new Date(); today.setHours(0,0,0,0);
+  if (isNaN(buy.getTime())) return showErr('Invalid date.');
+  if (buy > today) return showErr('Date cannot be in the future.');
+  if (buy.getFullYear() < 2000) return showErr('Date is too far in the past — typo?');
+
+  const shares = parseFloat(sharesStr);
+  const price = parseFloat(priceStr);
+  if (!(shares > 0)) return showErr('Shares must be greater than 0.');
+  if (!(price > 0)) return showErr('Price must be greater than 0.');
+  if (!['Taxable', 'IRA'].includes(account)) return showErr('Pick an account.');
+
+  const lot = { date: dateStr, shares, pricePaid: price, account };
+
+  if (_vooEditIndex >= 0 && _vooEditIndex < spLots.length) {
+    // Edit mode — replace in place
+    spLots[_vooEditIndex] = lot;
+  } else {
+    // Add mode — append (do not overwrite)
+    spLots.push(lot);
+  }
+  _vooEditIndex = -1;
+
+  closeAddVooLotModal();
+  renderSpBar();
+  renderSpSummary();
+  renderCapitalDeployed();
+  scheduleSave();
+
+  // If the VOO overlay is open, refresh it so the new lot shows immediately
+  if (cardOverlayActive) {
+    const ov = document.getElementById('card-overlay');
+    if (ov && ov.style.display !== 'none') {
+      // Best-effort: re-render whichever overlay is currently open by checking what's in content.
+      // Simpler approach: just re-render 'voo' if VOO content is visible. We don't track which
+      // overlay is open, so we just call _renderCardOverlay('voo') only if the title text matches.
+      const content = document.getElementById('card-overlay-content');
+      if (content && content.textContent.includes('Passive Core — VOO')) {
+        _renderCardOverlay('voo');
+      } else if (content && content.textContent.includes('Capital Deployed')) {
+        _renderCardOverlay('capital-deployed');
+      }
+    }
+  }
+}
+
+function deleteVooLot(idx) {
+  if (idx < 0 || idx >= spLots.length) return;
+  const lot = spLots[idx];
+  const cost = lot.shares * lot.pricePaid;
+  const msg = `Delete this VOO lot?\n\n${lot.date} · ${lot.shares} shares @ ${fmtDollar(lot.pricePaid)} · ${lot.account}\nTotal cost: ${fmtDollar(cost)}\n\nThis cannot be undone.`;
+  if (!confirm(msg)) return;
+  spLots.splice(idx, 1);
+  renderSpBar();
+  renderSpSummary();
+  renderCapitalDeployed();
+  scheduleSave();
+  // Re-render overlay if open and on VOO
+  if (cardOverlayActive) {
+    const content = document.getElementById('card-overlay-content');
+    if (content && content.textContent.includes('Passive Core — VOO')) {
+      _renderCardOverlay('voo');
+    }
+  }
+}
+
 function importSpCsv(input) {
   const file = input.files[0];
   if (!file) return;
@@ -4576,7 +4769,12 @@ function renderSpSummary() {
   const el = document.getElementById('sp-summary-content');
   if (!el) return;
   const sp = getSpTotals();
-  if (!sp) { el.innerHTML = '<div style="color:var(--color-text-tertiary);font-size:11px">No lots imported yet — use ⊕ Import S&P Lots above</div>'; return; }
+  const addBtn = '<button onclick="event.stopPropagation();openAddVooLotModal()" style="background:none;border:1px solid var(--color-border-tertiary);color:var(--color-text-secondary);border-radius:4px;padding:2px 8px;font-size:9px;cursor:pointer;font-family:inherit" title="Add a single VOO lot (append-only)">+ Add Lot</button>';
+
+  if (!sp) {
+    el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="color:var(--color-text-tertiary);font-size:11px">No lots yet — add your first below</div>' + addBtn + '</div>';
+    return;
+  }
 
   const activeValue = positions.filter(p => !p.closed && p.ticker).reduce((s,p) => s+(calcPos(p).exitValue||0), 0);
   const spValue = sp.price > 0 ? sp.currentValue : sp.totalInvested;
@@ -4592,7 +4790,10 @@ function renderSpSummary() {
       <div><div style="font-size:9px;color:var(--color-text-tertiary)">% of Total</div><div style="font-size:13px;font-weight:700;color:var(--color-text-secondary)">${spPct.toFixed(1)}%</div></div>
       <div><div style="font-size:9px;color:var(--color-text-tertiary)">Taxable</div><div style="font-size:11px;color:var(--color-text-secondary)">${fmtDollarWhole(sp.taxableInvested)}</div></div>
       <div><div style="font-size:9px;color:var(--color-text-tertiary)">IRA</div><div style="font-size:11px;color:var(--color-text-secondary)">${fmtDollarWhole(sp.iraInvested)}</div></div>
-      <div style="grid-column:1/-1"><div style="font-size:9px;color:var(--color-text-tertiary)">${spLots.length} lots · ${sp.totalShares} shares @ avg ${sp.totalShares > 0 ? fmtDollar(sp.totalInvested/sp.totalShares) : '—'}/sh</div></div>
+      <div style="grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:2px">
+        <div style="font-size:9px;color:var(--color-text-tertiary)">${spLots.length} lots · ${sp.totalShares} shares @ avg ${sp.totalShares > 0 ? fmtDollar(sp.totalInvested/sp.totalShares) : '—'}/sh</div>
+        ${addBtn}
+      </div>
     </div>`;
 }
 
@@ -5614,11 +5815,16 @@ function _renderCardOverlay(type) {
 
   } else if (type === 'voo') {
     const sp = getSpTotals();
-    if (!sp) { html = '<div style="color:var(--color-text-tertiary)">No VOO lots loaded</div>'; }
+    const overlayAddBtn = '<button onclick="closeCardOverlay();openAddVooLotModal()" style="background:none;border:1px solid var(--color-border-tertiary);color:var(--color-text-secondary);border-radius:4px;padding:4px 12px;font-size:10px;cursor:pointer;font-family:inherit">+ Add Lot</button>';
+
+    if (!sp) {
+      html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><div style="font-size:13px;font-weight:700;color:var(--color-text-primary)">Passive Core — VOO</div>' + overlayAddBtn + '</div>';
+      html += '<div style="color:var(--color-text-tertiary);padding:24px;text-align:center;font-size:11px">No VOO lots yet. Click + Add Lot to add your first.</div>';
+    }
     else {
       const byAcct = { Taxable: { shares: 0, invested: 0 }, IRA: { shares: 0, invested: 0 } };
       spLots.forEach(l => { byAcct[l.account].shares += l.shares; byAcct[l.account].invested += l.shares * l.pricePaid; });
-      html = '<div style="font-size:13px;font-weight:700;color:var(--color-text-primary);margin-bottom:16px">Passive Core — VOO</div>';
+      html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><div style="font-size:13px;font-weight:700;color:var(--color-text-primary)">Passive Core — VOO</div>' + overlayAddBtn + '</div>';
       html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;padding:12px;background:var(--color-background-tertiary);border-radius:var(--border-radius-md)">';
       html += '<div><div style="font-size:9px;color:var(--color-text-tertiary)">Total Invested</div><div style="font-size:15px;font-weight:700">' + fmtDollarWhole(sp.totalInvested) + '</div></div>';
       html += '<div><div style="font-size:9px;color:var(--color-text-tertiary)">Current Value</div><div style="font-size:15px;font-weight:700">' + (sp.price>0?fmtDollarWhole(sp.currentValue):'—') + '</div></div>';
@@ -5640,6 +5846,33 @@ function _renderCardOverlay(type) {
         html += '<div><div style="font-size:9px;color:var(--color-text-tertiary)">G/L</div><div style="font-weight:600;color:' + (gl>=0?'var(--color-text-success)':'var(--color-text-danger)') + '">' + (sp.price>0?fmtDollarWhole(gl):'—') + '</div></div>';
         html += '</div></div>';
       });
+
+      // Individual lot list with edit/delete
+      // Sort by date desc (newest first), but display with original index so edit/delete work correctly
+      const indexed = spLots.map((l, i) => ({ lot: l, idx: i }));
+      indexed.sort((a, b) => b.lot.date.localeCompare(a.lot.date));
+
+      html += '<div style="font-size:10px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.08em;margin:18px 0 6px">All Lots · Newest First</div>';
+      html += '<div style="border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);max-height:340px;overflow-y:auto">';
+      html += '<div style="display:grid;grid-template-columns:1fr 0.7fr 0.9fr 0.9fr 0.7fr 0.6fr;gap:8px;padding:6px 10px;background:var(--color-background-tertiary);font-size:9px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.08em;position:sticky;top:0">';
+      html += '<div>Date</div><div style="text-align:right">Shares</div><div style="text-align:right">Price</div><div style="text-align:right">Cost</div><div>Account</div><div style="text-align:right">Actions</div>';
+      html += '</div>';
+
+      indexed.forEach(({ lot, idx }) => {
+        const cost = lot.shares * lot.pricePaid;
+        html += '<div style="display:grid;grid-template-columns:1fr 0.7fr 0.9fr 0.9fr 0.7fr 0.6fr;gap:8px;padding:6px 10px;border-bottom:1px solid var(--color-border-tertiary);font-size:11px;align-items:center">';
+        html += '<div style="color:var(--color-text-secondary)">' + esc(lot.date) + '</div>';
+        html += '<div style="text-align:right">' + lot.shares + '</div>';
+        html += '<div style="text-align:right">' + fmtDollar(lot.pricePaid) + '</div>';
+        html += '<div style="text-align:right;font-weight:600">' + fmtDollarWhole(cost) + '</div>';
+        html += '<div style="font-size:10px;color:var(--color-text-tertiary)">' + esc(lot.account) + '</div>';
+        html += '<div style="text-align:right;display:flex;gap:4px;justify-content:flex-end">';
+        html += '<button onclick="closeCardOverlay();openAddVooLotModal(' + idx + ')" title="Edit lot" style="background:none;border:1px solid var(--color-border-tertiary);color:var(--color-text-secondary);border-radius:3px;padding:1px 6px;font-size:9px;cursor:pointer;font-family:inherit">edit</button>';
+        html += '<button onclick="deleteVooLot(' + idx + ')" title="Delete lot" style="background:none;border:1px solid var(--color-border-tertiary);color:var(--color-text-danger);border-radius:3px;padding:1px 6px;font-size:9px;cursor:pointer;font-family:inherit">×</button>';
+        html += '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
     }
 
   } else if (type === 'strategy') {
@@ -6052,6 +6285,53 @@ function _renderCardOverlay(type) {
     }
 
     html = header + body;
+  } else if (type === 'capital-deployed') {
+    const { windows, buys } = computeCapitalDeployed();
+
+    html = '<div style="font-size:13px;font-weight:700;color:var(--color-text-primary);margin-bottom:6px">Capital Deployed — Money In Over Time</div>';
+    html += '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:16px">Gross dollars put to work across stocks and VOO. Sales are not netted out — this is "how much new money have I deployed," not net cash flow.</div>';
+
+    // Windows table
+    html += '<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 0.6fr;gap:8px;padding:10px 12px;background:var(--color-background-tertiary);border-radius:var(--border-radius-md);font-size:9px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">';
+    html += '<div>Window</div><div style="text-align:right">Stocks</div><div style="text-align:right">VOO</div><div style="text-align:right">Total</div><div style="text-align:right">Buys</div>';
+    html += '</div>';
+
+    windows.forEach(w => {
+      const dim = w.total === 0 ? 'opacity:0.45' : '';
+      const isAllTime = w.key === 'all';
+      const rowBg = isAllTime ? 'background:var(--color-background-tertiary);font-weight:700' : '';
+      html += '<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 0.6fr;gap:8px;padding:8px 12px;border-bottom:1px solid var(--color-border-tertiary);font-size:11px;' + dim + ';' + rowBg + '">';
+      html += '<div style="color:var(--color-text-secondary)">' + w.label + '</div>';
+      html += '<div style="text-align:right">' + (w.stock > 0 ? fmtDollarWhole(w.stock) : '—') + '</div>';
+      html += '<div style="text-align:right">' + (w.voo > 0 ? fmtDollarWhole(w.voo) : '—') + '</div>';
+      html += '<div style="text-align:right;font-weight:700;color:var(--color-text-primary)">' + (w.total > 0 ? fmtDollarWhole(w.total) : '—') + '</div>';
+      html += '<div style="text-align:right;color:var(--color-text-tertiary)">' + w.count + '</div>';
+      html += '</div>';
+    });
+
+    // Audit list — every buy, newest first
+    html += '<div style="font-size:10px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.08em;margin:18px 0 6px">All Buys · Newest First</div>';
+
+    if (buys.length === 0) {
+      html += '<div style="padding:20px;color:var(--color-text-tertiary);font-style:italic;text-align:center;font-size:11px">No buys recorded yet.</div>';
+    } else {
+      html += '<div style="max-height:340px;overflow-y:auto;border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-md)">';
+      html += '<div style="display:grid;grid-template-columns:1fr 0.8fr 0.6fr 0.8fr 1fr;gap:8px;padding:6px 10px;background:var(--color-background-tertiary);font-size:9px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:0.08em;position:sticky;top:0">';
+      html += '<div>Date</div><div>Ticker</div><div>Kind</div><div>Account</div><div style="text-align:right">Amount</div>';
+      html += '</div>';
+      buys.forEach(b => {
+        const kindColor = b.kind === 'voo' ? '#a0a0b8' : 'var(--color-text-info)';
+        const kindLabel = b.kind === 'voo' ? 'VOO' : 'Stock';
+        html += '<div style="display:grid;grid-template-columns:1fr 0.8fr 0.6fr 0.8fr 1fr;gap:8px;padding:5px 10px;border-bottom:1px solid var(--color-border-tertiary);font-size:11px">';
+        html += '<div style="color:var(--color-text-secondary)">' + esc(b.date) + '</div>';
+        html += '<div style="font-weight:600">' + esc(b.ticker) + '</div>';
+        html += '<div style="color:' + kindColor + ';font-size:9px;text-transform:uppercase;letter-spacing:0.05em;align-self:center">' + kindLabel + '</div>';
+        html += '<div style="color:var(--color-text-tertiary);font-size:10px">' + esc(b.account) + '</div>';
+        html += '<div style="text-align:right;font-weight:600">' + fmtDollarWhole(b.amount) + '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
   }
 
   content.innerHTML = html;
@@ -7536,6 +7816,118 @@ function renderRebalance() {
 }
 
 
+// ─────────────────────────────────────────────
+// Capital Deployed — running tab of money put to work
+//
+// Buckets gross capital deployment (stocks + VOO buys) into rolling time windows.
+// "Gross" = sum of buy-side dollars only. Sales are not netted out — the question
+// being answered is "how much new money have I put to work in the last X days,"
+// not "what's my net cash flow."
+//
+// Sources:
+//   - positions[]:  every row is one buy. Capital = shares × pricePaid, dated by dateBought.
+//                   Includes both open and closed positions (the buy still happened
+//                   even if you later sold).
+//   - spLots[]:     same shape for VOO. Each lot is one buy.
+//
+// Window semantics: "Last N days" = bought on or after (today - N days), inclusive.
+// Today is the user's local date — we strip time to start-of-day to keep the window
+// edges predictable across DST and late-evening sessions.
+// ─────────────────────────────────────────────
+function computeCapitalDeployed() {
+  // Build a unified list of buys: {date: 'YYYY-MM-DD', amount, kind, ticker, account}
+  const buys = [];
+
+  positions.forEach(p => {
+    if (!p.dateBought || !p.shares || !p.pricePaid) return;
+    const shares = parseFloat(p.shares);
+    const price = parseFloat(p.pricePaid);
+    if (!(shares > 0) || !(price > 0)) return;
+    buys.push({
+      date: p.dateBought,
+      amount: shares * price,
+      kind: 'stock',
+      ticker: p.ticker || '—',
+      account: p.account || 'Taxable'
+    });
+  });
+
+  spLots.forEach(l => {
+    if (!l.date || !l.shares || !l.pricePaid) return;
+    if (!(l.shares > 0) || !(l.pricePaid > 0)) return;
+    buys.push({
+      date: l.date,
+      amount: l.shares * l.pricePaid,
+      kind: 'voo',
+      ticker: 'VOO',
+      account: l.account || 'Taxable'
+    });
+  });
+
+  // Sort newest-first for the audit list
+  buys.sort((a, b) => b.date.localeCompare(a.date));
+
+  // Bucket by window. Days are calendar days from local midnight today.
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const msPerDay = 24 * 60 * 60 * 1000;
+
+  const windows = [
+    { key: '7d', label: 'Last 7 days', days: 7 },
+    { key: '30d', label: 'Last 30 days', days: 30 },
+    { key: '90d', label: 'Last 90 days', days: 90 },
+    { key: '180d', label: 'Last 180 days', days: 180 },
+    { key: '365d', label: 'Last 365 days', days: 365 },
+    { key: 'all', label: 'All time', days: null }
+  ];
+
+  const result = windows.map(w => {
+    let stock = 0, voo = 0, count = 0;
+    buys.forEach(b => {
+      if (w.days !== null) {
+        const buyDate = new Date(b.date + 'T00:00:00');
+        const diff = (today - buyDate) / msPerDay;
+        if (diff < 0 || diff > w.days) return;
+      }
+      if (b.kind === 'stock') stock += b.amount;
+      else voo += b.amount;
+      count++;
+    });
+    return { ...w, stock, voo, total: stock + voo, count };
+  });
+
+  return { windows: result, buys };
+}
+
+function renderCapitalDeployed() {
+  const el = document.getElementById('capital-deployed-content');
+  if (!el) return;
+  const { windows } = computeCapitalDeployed();
+
+  // Show the four most actionable windows on the card; rest live in overlay
+  const display = windows.filter(w => ['7d', '30d', '90d', '365d'].includes(w.key));
+
+  if (windows[windows.length - 1].total === 0) {
+    el.innerHTML = '<div style="color:var(--color-text-tertiary);font-size:11px">No buys recorded yet.</div>';
+    return;
+  }
+
+  let html = '<div style="display:flex;flex-direction:column;gap:5px">';
+  display.forEach(w => {
+    const dim = w.total === 0 ? 'opacity:0.45' : '';
+    const splitTitle = w.total > 0
+      ? 'Stocks ' + fmtDollarWhole(w.stock) + ' · VOO ' + fmtDollarWhole(w.voo)
+      : 'No buys in this window';
+    html += '<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:11px;' + dim + '" title="' + splitTitle + '">';
+    html += '<span style="color:var(--color-text-tertiary);font-size:10px">' + w.label + '</span>';
+    html += '<span style="font-weight:700;color:var(--color-text-primary)">' + fmtDollarWhole(w.total) + '</span>';
+    html += '</div>';
+  });
+  html += '<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--color-border-tertiary);font-size:9px;color:var(--color-text-tertiary)">Gross deployment · click for full breakdown</div>';
+  html += '</div>';
+  el.innerHTML = html;
+}
+
 function renderAll() {
   const open = positions.filter(p => !p.closed);
   const closed = positions.filter(p => p.closed);
@@ -7570,6 +7962,7 @@ function renderAll() {
   renderIndustryRef();
   renderCashDisplay();
   renderCapitalFlow();
+  renderCapitalDeployed();
   renderTaxExposure();
   renderStaleBanner();
   renderStaleTags();
